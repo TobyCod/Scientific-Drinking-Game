@@ -7,6 +7,7 @@
   "scripts": {
     "dev": "vite",
     "build": "tsc -b --noEmit && vite build",
+    "build:native": "VITE_BASE=/ VITE_NATIVE=true npm run build",
     "preview": "vite preview",
     "test": "vitest run",
     "test:watch": "vitest",
@@ -15,6 +16,8 @@
     "format": "prettier --write ."
   },
   "dependencies": {
+    "@capacitor/core": "^8.5.1",
+    "@capacitor/ios": "^8.5.1",
     "firebase": "^12.3.0",
     "qrcode-generator": "^2.0.4",
     "react": "^19.2.0",
@@ -23,6 +26,7 @@
     "zustand": "^5.0.8"
   },
   "devDependencies": {
+    "@capacitor/cli": "^8.5.1",
     "@testing-library/jest-dom": "^6.9.0",
     "@testing-library/react": "^16.3.0",
     "@types/react": "^19.2.0",

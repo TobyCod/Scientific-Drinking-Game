@@ -16,6 +16,8 @@ import { Icon } from '../../components/icons';
 import { QrCode } from '../../components/ui/QrCode';
 import { haptic } from '../../lib/haptics';
 import { formatBac } from '../../lib/format';
+import { isNativeApp } from '../../lib/platform';
+import { LEGAL } from '../../legal/site';
 import { gamesForGroup } from '../../games/registry';
 import type { GamePlayer } from '../../games/types';
 import { GameCard } from '../games/GameCard';
@@ -37,7 +39,11 @@ export function LobbyScreen() {
   const players = party.players;
   const suitable = gamesForGroup(players.length, online);
 
-  const inviteUrl = `${location.origin}${location.pathname}#/lobby?code=${party.code}`;
+  // In der nativen App wäre location.origin `capacitor://localhost` – ein Link
+  // darauf ist für jeden Empfänger tot. Dort zeigt die Einladung deshalb auf
+  // die öffentliche Web-Adresse, wo Gäste auch ohne installierte App mitspielen.
+  const inviteBase = isNativeApp() ? LEGAL.url : `${location.origin}${location.pathname}`;
+  const inviteUrl = `${inviteBase}#/lobby?code=${party.code}`;
 
   const shareLink = () => {
     const url = inviteUrl;

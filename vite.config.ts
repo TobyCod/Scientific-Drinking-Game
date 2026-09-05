@@ -15,8 +15,11 @@ export default defineConfig({
       // Ein stilles Auto-Update würde laufende Runden mitten im Spiel neu
       // laden – und nicht auf allen Handys gleichzeitig.
       registerType: 'prompt',
-      // Vitest braucht keinen Service Worker.
-      disable: process.env.VITEST === 'true',
+      // Vitest braucht keinen Service Worker – und die native App auch nicht:
+      // Capacitor liefert die Assets bereits vom Gerät, und im WKWebView
+      // registriert sich ein Service Worker ohnehin nicht. Er wäre toter
+      // Ballast mit einem Update-Banner, das niemals auslösen kann.
+      disable: process.env.VITEST === 'true' || process.env.VITE_NATIVE === 'true',
       includeAssets: ['icon.svg', 'icon-180.png'],
       manifest: {
         name: 'Pegel - Wissenschaftliche Trinkspiele',

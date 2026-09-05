@@ -1,0 +1,145 @@
+name: iOS TestFlight
+
+# Baut die App auf einem gemieteten macOS-Rechner und laedt sie nach
+# TestFlight. Fuer oeffentliche Repositories sind diese Runner kostenlos.
+#
+# Signiert wird ueber einen App-Store-Connect-API-Schluessel: Xcode holt
+# Zertifikat und Profil selbst (-allowProvisioningUpdates). Das spart es,
+# Zertifikate als Geheimnisse abzulegen.
+#
+# Benoetigte Repository-Secrets:
+#   ASC_KEY_P8     — Inhalt der .p8-Datei, base64-kodiert
+#   ASC_KEY_ID     — Key-ID des Schluessels
+#   ASC_ISSUER_ID  — Issuer-ID des Teams
+#   APPLE_TEAM_ID  — Team-ID (10 Zeichen)
+
+# Bewusst nur von Hand ausloesbar: ein Upload verbraucht eine Build-Nummer
+# und taucht sofort in App Store Connect auf.
+on:
+  workflow_dispatch:
+
+concurrency:
+  group: ios-testflight
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: macos-latest
+    timeout-minutes: 60
+
+    steps:
+      - uses: actions/checkout@v4
+
+      # Apple verlangt seit dem 28.04.2026 Xcode 26 bzw. das iOS-26-SDK fuer
+      # jede Einreichung. latest-stable haelt das automatisch nach.
+      - name: Xcode waehlen
+        uses: maxim-lobanov/setup-xcode@v1
+        with:
+          xcode-version: latest-stable
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Abhaengigkeiten
+        run: npm ci
+
+      # Dieselben Pruefungen wie im Web-Build. Ein Build, der die Tests nicht
+      # besteht, hat in TestFlight nichts verloren.
+      - name: Pruefen
+        run: |
+          npm run typecheck
+          npm run lint
+          npm test
+
+      - name: Web-Build fuer den Container
+        run: npm run build:native
+
+      - name: Assets in das iOS-Projekt kopieren
+        run: npx cap sync ios
+
+      - name: API-Schluessel ablegen
+        env:
+          ASC_KEY_P8: ${{ secrets.ASC_KEY_P8 }}
+          ASC_KEY_ID: ${{ secrets.ASC_KEY_ID }}
+        run: |
+          mkdir -p ~/private_keys
+          echo "$ASC_KEY_P8" | base64 --decode > ~/private_keys/AuthKey_$ASC_KEY_ID.p8
+          chmod 600 ~/private_keys/AuthKey_$ASC_KEY_ID.p8
+
+      - name: Build-Nummer setzen
+        working-directory: ios/App
+        run: |
+          # Jeder Upload braucht eine hoehere Build-Nummer als der vorige.
+          # Die Lauf-Nummer waechst monoton und ist dafuer genau richtig.
+          /usr/libexec/PlistBuddy -c \
+            "Set :CFBundleVersion ${{ github.run_number }}" App/Info.plist
+
+      - name: Archivieren
+        working-directory: ios/App
+        env:
+          ASC_KEY_ID: ${{ secrets.ASC_KEY_ID }}
+          ASC_ISSUER_ID: ${{ secrets.ASC_ISSUER_ID }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+        run: |
+          xcodebuild archive \
+            -project App.xcodeproj \
+            -scheme App \
+            -configuration Release \
+            -destination 'generic/platform=iOS' \
+            -archivePath "$RUNNER_TEMP/Pegel.xcarchive" \
+            -allowProvisioningUpdates \
+            -authenticationKeyPath ~/private_keys/AuthKey_$ASC_KEY_ID.p8 \
+            -authenticationKeyID "$ASC_KEY_ID" \
+            -authenticationKeyIssuerID "$ASC_ISSUER_ID" \
+            DEVELOPMENT_TEAM="$APPLE_TEAM_ID" \
+            CODE_SIGN_STYLE=Automatic
+
+      - name: Exportieren
+        env:
+          ASC_KEY_ID: ${{ secrets.ASC_KEY_ID }}
+          ASC_ISSUER_ID: ${{ secrets.ASC_ISSUER_ID }}
+          APPLE_TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+        run: |
+          cat > "$RUNNER_TEMP/export.plist" <<PLIST
+          <?xml version="1.0" encoding="UTF-8"?>
+          <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+          <plist version="1.0">
+          <dict>
+            <key>method</key><string>app-store-connect</string>
+            <key>teamID</key><string>$APPLE_TEAM_ID</string>
+            <key>uploadSymbols</key><true/>
+            <key>destination</key><string>export</string>
+          </dict>
+          </plist>
+          PLIST
+          xcodebuild -exportArchive \
+            -archivePath "$RUNNER_TEMP/Pegel.xcarchive" \
+            -exportPath "$RUNNER_TEMP/export" \
+            -exportOptionsPlist "$RUNNER_TEMP/export.plist" \
+            -allowProvisioningUpdates \
+            -authenticationKeyPath ~/private_keys/AuthKey_$ASC_KEY_ID.p8 \
+            -authenticationKeyID "$ASC_KEY_ID" \
+            -authenticationKeyIssuerID "$ASC_ISSUER_ID"
+
+      - name: Nach TestFlight laden
+        env:
+          ASC_KEY_ID: ${{ secrets.ASC_KEY_ID }}
+          ASC_ISSUER_ID: ${{ secrets.ASC_ISSUER_ID }}
+        run: |
+          IPA=$(find "$RUNNER_TEMP/export" -name '*.ipa' | head -1)
+          echo "Lade $IPA"
+          xcrun altool --upload-app -f "$IPA" --type ios \
+            --apiKey "$ASC_KEY_ID" --apiIssuer "$ASC_ISSUER_ID"
+
+      # Bei einem Fehlschlag ist der Xcode-Log die einzige brauchbare Spur.
+      - name: Log sichern
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: xcodebuild-log
+          path: |
+            ~/Library/Logs/gym
+            ~/Library/Developer/Xcode/DerivedData/**/Logs
+          if-no-files-found: ignore

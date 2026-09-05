@@ -8,3 +8,7 @@ dist-ssr
 coverage
 .vite
 *.tsbuildinfo
+
+# Quelle fuer die Icon-Erzeugung, siehe stages/04 build-runbook.md.
+# Wird aus public/icon.svg kopiert - keine zweite Icon-Quelle im Repo.
+assets
