@@ -64,9 +64,9 @@ jobs:
           ASC_KEY_P8: ${{ secrets.ASC_KEY_P8 }}
           ASC_KEY_ID: ${{ secrets.ASC_KEY_ID }}
         run: |
-          mkdir -p ~/private_keys
-          echo "$ASC_KEY_P8" | base64 --decode > ~/private_keys/AuthKey_$ASC_KEY_ID.p8
-          chmod 600 ~/private_keys/AuthKey_$ASC_KEY_ID.p8
+          mkdir -p "$HOME/private_keys"
+          echo "$ASC_KEY_P8" | base64 --decode > "$HOME/private_keys/AuthKey_$ASC_KEY_ID.p8"
+          chmod 600 "$HOME/private_keys/AuthKey_$ASC_KEY_ID.p8"
 
       - name: Build-Nummer setzen
         working-directory: ios/App
@@ -90,7 +90,7 @@ jobs:
             -destination 'generic/platform=iOS' \
             -archivePath "$RUNNER_TEMP/Pegel.xcarchive" \
             -allowProvisioningUpdates \
-            -authenticationKeyPath ~/private_keys/AuthKey_$ASC_KEY_ID.p8 \
+            -authenticationKeyPath "$HOME/private_keys/AuthKey_$ASC_KEY_ID.p8" \
             -authenticationKeyID "$ASC_KEY_ID" \
             -authenticationKeyIssuerID "$ASC_ISSUER_ID" \
             DEVELOPMENT_TEAM="$APPLE_TEAM_ID" \
@@ -119,7 +119,7 @@ jobs:
             -exportPath "$RUNNER_TEMP/export" \
             -exportOptionsPlist "$RUNNER_TEMP/export.plist" \
             -allowProvisioningUpdates \
-            -authenticationKeyPath ~/private_keys/AuthKey_$ASC_KEY_ID.p8 \
+            -authenticationKeyPath "$HOME/private_keys/AuthKey_$ASC_KEY_ID.p8" \
             -authenticationKeyID "$ASC_KEY_ID" \
             -authenticationKeyIssuerID "$ASC_ISSUER_ID"
 
