@@ -6,6 +6,12 @@
 	<string>$(CAPACITOR_DEBUG)</string>
 	<key>CFBundleDevelopmentRegion</key>
 	<string>en</string>
+	<!-- Die App verschluesselt nichts selbst, sie nutzt nur HTTPS ueber die
+	     System-Schnittstellen. Das faellt unter die Standardausnahme der
+	     US-Exportkontrolle. Ohne diese Angabe bleibt jeder Build in
+	     TestFlight auf "Missing Compliance" stehen und erreicht keinen Tester. -->
+	<key>ITSAppUsesNonExemptEncryption</key>
+	<false/>
 	<key>CFBundleDisplayName</key>
         <string>Pegel</string>
 	<key>CFBundleExecutable</key>
