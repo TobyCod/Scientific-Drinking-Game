@@ -10,6 +10,8 @@
 	     System-Schnittstellen. Das faellt unter die Standardausnahme der
 	     US-Exportkontrolle. Ohne diese Angabe bleibt jeder Build in
 	     TestFlight auf "Missing Compliance" stehen und erreicht keinen Tester. -->
+	<key>NSCameraUsageDescription</key>
+	<string>Die Kamera wird nur benutzt, wenn du selbst ein Foto für das Album des Abends aufnimmst. Die Bilder bleiben auf deinem Gerät und werden nirgends hochgeladen.</string>
 	<key>ITSAppUsesNonExemptEncryption</key>
 	<false/>
 	<key>CFBundleDisplayName</key>
