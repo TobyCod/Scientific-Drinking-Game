@@ -49,11 +49,11 @@ beforeEach(() => {
 });
 
 describe('Album: die Sperre an ihrer Wirkstelle', () => {
-  it('zeigt ein unentwickeltes Bild nicht und fragt es gar nicht erst ab', () => {
+  it('zeigt ein unentwickeltes Bild nicht und fragt es gar nicht erst ab', async () => {
     useFilm.setState({ photos: [foto({ developAt: Date.now() + 3_600_000 })] });
     zeige();
+    expect(await screen.findByLabelText('Noch nicht entwickelt')).toBeTruthy();
     expect(screen.queryByRole('img')).toBeNull();
-    expect(screen.getByLabelText('Noch nicht entwickelt')).toBeTruthy();
     // Entscheidend: die Datei wird nicht einmal geoeffnet.
     expect(photoUrl).not.toHaveBeenCalled();
   });
@@ -65,7 +65,7 @@ describe('Album: die Sperre an ihrer Wirkstelle', () => {
     expect(photoUrl).toHaveBeenCalledWith('a.jpg');
   });
 
-  it('trennt entwickelte und wartende Bilder im selben Abend', () => {
+  it('trennt entwickelte und wartende Bilder im selben Abend', async () => {
     useFilm.setState({
       photos: [
         foto({ id: 'p1', file: 'alt.jpg', developAt: Date.now() - 1 }),
@@ -73,6 +73,9 @@ describe('Album: die Sperre an ihrer Wirkstelle', () => {
       ],
     });
     zeige();
+    // Erst abwarten, bis das entwickelte Bild steht: sonst laufen die
+    // Zusicherungen, waehrend die Adresse noch geladen wird.
+    await screen.findByRole('img');
     expect(screen.getAllByLabelText('Noch nicht entwickelt')).toHaveLength(1);
     expect(photoUrl).toHaveBeenCalledTimes(1);
     expect(photoUrl).toHaveBeenCalledWith('alt.jpg');
