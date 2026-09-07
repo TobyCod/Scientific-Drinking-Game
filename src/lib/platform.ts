@@ -12,7 +12,11 @@
  */
 declare global {
   interface Window {
-    Capacitor?: { isNativePlatform?: () => boolean };
+    Capacitor?: {
+      isNativePlatform?: () => boolean;
+      /** Macht aus einem nativen Dateipfad eine im WebView ladbare Adresse. */
+      convertFileSrc?: (uri: string) => string;
+    };
   }
 }
 
