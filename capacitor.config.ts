@@ -24,6 +24,17 @@ const config: CapacitorConfig = {
     contentInset: 'never',
     backgroundColor: '#08080B',
   },
+  plugins: {
+    SplashScreen: {
+      // Das Startbild bleibt stehen, bis die Oberflaeche steht - `initNative`
+      // blendet es aus. Das Auto-Hide ist die Rueckfallebene: laeuft unser
+      // JavaScript gar nicht, verschwindet es trotzdem nach zwei Sekunden,
+      // statt die App stehen zu lassen.
+      launchAutoHide: true,
+      launchShowDuration: 2000,
+      backgroundColor: '#08080B',
+    },
+  },
 };
 
 export default config;
