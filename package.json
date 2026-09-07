@@ -17,6 +17,7 @@
   },
   "dependencies": {
     "@capacitor/core": "^8.5.1",
+    "@capacitor/haptics": "^8.0.2",
     "@capacitor/ios": "^8.5.1",
     "firebase": "^12.3.0",
     "qrcode-generator": "^2.0.4",
