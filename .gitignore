@@ -11,4 +11,6 @@ coverage
 
 # Quelle fuer die Icon-Erzeugung, siehe stages/04 build-runbook.md.
 # Wird aus public/icon.svg kopiert - keine zweite Icon-Quelle im Repo.
-assets
+# Fuehrender Slash: gemeint ist NUR der Ordner im Wurzelverzeichnis. Ohne
+# ihn verschwand auch src/assets/ mitsamt der Schriftdatei aus dem Repo.
+/assets
