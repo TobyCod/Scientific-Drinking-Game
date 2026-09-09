@@ -9,8 +9,8 @@ coverage
 .vite
 *.tsbuildinfo
 
-# Quelle fuer die Icon-Erzeugung, siehe stages/04 build-runbook.md.
-# Wird aus public/icon.svg kopiert - keine zweite Icon-Quelle im Repo.
+# Zwischenstand der Icon-Erzeugung, wird aus public/icon.svg kopiert -
+# keine zweite Icon-Quelle im Repo.
 # Fuehrender Slash: gemeint ist NUR der Ordner im Wurzelverzeichnis. Ohne
-# ihn verschwand auch src/assets/ mitsamt der Schriftdatei aus dem Repo.
+# ihn verschwaende auch src/assets/ mitsamt der Schriftdatei aus dem Repo.
 /assets
