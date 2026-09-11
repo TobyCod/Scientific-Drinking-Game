@@ -1,5 +1,5 @@
 import { GroupLevel } from './GroupLevel';
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {
   DEFAULT_TARGET_BAC,
@@ -65,6 +65,14 @@ export function LobbyScreen() {
   const inviteBase = isNativeApp() ? LEGAL.url : `${location.origin}${location.pathname}`;
   const inviteUrl = `${inviteBase}#/lobby?code=${party.code}`;
 
+  // Wer wartet, schaut nicht dauernd aufs Display. Ein Beitritt ist die
+  // einzige Nachricht dieses Bildschirms – und darf sich melden.
+  const zuletzt = useRef(players.length);
+  useEffect(() => {
+    if (players.length > zuletzt.current) haptic('success');
+    zuletzt.current = players.length;
+  }, [players.length]);
+
   const shareLink = () => {
     const url = inviteUrl;
     const text = `Komm in unsere Runde! Lobby-Code: ${party.code}`;
@@ -79,7 +87,14 @@ export function LobbyScreen() {
         title="Runde"
         right={
           online ? (
-            <button className="btn btn--plain" style={{ color: 'var(--red)' }} onClick={party.leave}>
+            <button
+              className="btn btn--plain"
+              style={{ color: 'var(--red)' }}
+              onClick={() => {
+                haptic('warn');
+                party.leave();
+              }}
+            >
               Verlassen
             </button>
           ) : null
@@ -90,13 +105,13 @@ export function LobbyScreen() {
         {online ? (
           <section className="card card--pad-lg stack-3">
             <div className="t-upper t-center">Lobby-Code</div>
-            <div className="lobbycode" onClick={shareLink} role="button" tabIndex={0}>
+            <button className="lobbycode" onClick={shareLink} aria-label="Lobby-Code teilen">
               {party.code?.split('').map((c, i) => (
                 <span key={i} className="lobbycode__char">
                   {c}
                 </span>
               ))}
-            </div>
+            </button>
             <div className="qrwrap">
               <QrCode value={inviteUrl} size={168} />
               <div className="t-caption t-center">Scannen statt tippen</div>
@@ -191,7 +206,7 @@ export function LobbyScreen() {
           <div className="list">
             {players.map((p) => (
               <div key={p.id} className="list__item">
-                <Avatar name={p.name} color={p.color} size="sm" />
+                <Avatar name={p.name} color={p.color} photo={p.photo} size="sm" />
                 <span className="grow">
                   <span className="t-headline" style={{ display: 'block' }}>
                     {p.name} {p.id === party.me.id && <span className="t-caption">(du)</span>}
