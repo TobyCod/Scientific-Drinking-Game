@@ -7,9 +7,8 @@ import { baseFor, isOver, roundGoal } from '../shared/rounds';
 import { DrinkCall, DrinkCallList } from '../shared/DrinkCall';
 import { BigCard, Choice, PlayerChip, VoteGrid, VoteResult, WaitingFor } from '../shared/pieces';
 import { PeekCard } from '../shared/PeekCard';
-import { PassDevice } from '../shared/PassDevice';
 import type { GameActionInput, GameDefinition, GamePlayer, GameRuntime } from '../types';
-import { WORD_PAIRS } from './words';
+import { WORDS } from './words';
 import { meta } from './meta';
 
 /** Vier entschiedene Runden sind bei „mittel" eine Partie – jede dauert ein paar Minuten. */
@@ -19,7 +18,10 @@ interface State {
   /** `guess` ist der letzte Rateversuch des Enttarnten, `over` beendet die
    *  Runde, `final` die Partie. */
   phase: 'reveal' | 'describe' | 'vote' | 'result' | 'guess' | 'over' | 'final';
-  words: [string, string];
+  /** Das Wort der Gruppe. */
+  word: string;
+  /** Was Undercover statt des Worts sieht. */
+  hint: string;
   undercoverId: string;
   seen: string[];
   order: string[];
@@ -49,12 +51,14 @@ interface State {
 
 /**
  * Drei Wörter zur Auswahl für den letzten Rateversuch: das echte Wort der
- * Gruppe und zwei Ablenkungen aus anderen Paaren. Läuft im Reducer, darf also
- * mischen.
+ * Gruppe und zwei Ablenkungen aus derselben Kategorie – aus einer anderen
+ * wären sie mit dem Hinweis sofort auszuschließen. Läuft im Reducer, darf
+ * also mischen.
  */
 function guessChoices(civilian: string): string[] {
-  const andere = WORD_PAIRS.flat().filter((w) => w !== civilian);
-  return shuffle([civilian, ...shuffle(andere).slice(0, 2)]);
+  const kategorie = WORDS.find((w) => w.word === civilian)?.category;
+  const andere = WORDS.filter((w) => w.category === kategorie && w.word !== civilian);
+  return shuffle([civilian, ...shuffle(andere).slice(0, 2).map((w) => w.word)]);
 }
 
 /** Was eine neue Runde aus der alten mitnimmt: Ziellinie und Punktestand. */
@@ -62,24 +66,28 @@ type Carry = Pick<State, 'goal' | 'groupWins' | 'agentWins' | 'lastUndercoverId'
 
 function newRound(players: GamePlayer[], round: number, carry: Carry): State {
   const alive = players.map((p) => p.id);
-  const [a, b] = pick(WORD_PAIRS);
-  const flip = Math.random() < 0.5;
+  const { word, hints } = pick(WORDS);
   // „Oft ist die gleiche Person der Imposter" ist die haeufigste Beschwerde bei
   // den Vertretern dieses Genres. Wer zuletzt dran war, faellt raus - solange
   // ueberhaupt jemand anders da ist.
   const wahl = alive.filter((id) => id !== carry.lastUndercoverId);
   const undercoverId = pick(wahl.length ? wahl : alive);
+  // Undercover beginnt nie: wer als Erstes beschreibt, hat nichts gehört,
+  // woran er sich anlehnen könnte.
+  const order = shuffle(alive);
+  if (order[0] === undercoverId && order.length > 1) order.push(order.shift()!);
   return {
     ...carry,
     phase: 'reveal',
-    words: flip ? [b, a] : [a, b],
+    word,
+    hint: pick(hints),
     undercoverId,
     lastUndercoverId: undercoverId,
     tie: false,
     guessOptions: [],
     guessed: null,
     seen: [],
-    order: shuffle(alive),
+    order,
     turnIndex: 0,
     votes: {},
     eliminated: [],
@@ -151,7 +159,7 @@ export const undercover: GameDefinition<State> = {
             lastOut: out,
             tie,
             phase: 'guess',
-            guessOptions: guessChoices(state.words[0]),
+            guessOptions: guessChoices(state.word),
           };
         }
         const undercoverWins = remaining.length <= 2;
@@ -169,7 +177,7 @@ export const undercover: GameDefinition<State> = {
       case 'guess': {
         if (state.phase !== 'guess') return state;
         const word = String(action.word);
-        const richtig = word === state.words[0];
+        const richtig = word === state.word;
         return {
           ...state,
           guessed: word,
@@ -213,13 +221,12 @@ export const undercover: GameDefinition<State> = {
 };
 
 function UndercoverGame({ state, players, me, dispatch, quit, online }: GameRuntime<State>) {
-  // Auf einem geteilten Handy muss bestaetigt werden, dass wirklich die
-  // richtige Person schaut. Das ist bewusst lokal: es geht niemanden sonst an.
-  const [handedOver, setHandedOver] = useState(false);
+  // Erst wer die Karte einmal offen hatte, kann weitergeben. Bewusst lokal:
+  // es geht niemanden sonst an.
+  const [revealed, setRevealed] = useState(false);
   const send = (a: GameActionInput) => dispatch(a);
   const byId = (id: string | null) => players.find((p) => p.id === id) ?? null;
   const alive = players.filter((p) => !state.eliminated.includes(p.id));
-  const wordFor = (id: string) => (id === state.undercoverId ? state.words[1] : state.words[0]);
 
   if (state.phase === 'final') {
     return (
@@ -266,34 +273,51 @@ function UndercoverGame({ state, players, me, dispatch, quit, online }: GameRunt
       );
     }
     if (!current) return frame(<BigCard kicker="Moment">Runde wird vorbereitet.</BigCard>);
-    if (!online && !handedOver) {
-      return frame(
-        <PassDevice
-          player={current}
-          step={state.seen.length + 1}
-          total={alive.length}
-          onConfirm={() => setHandedOver(true)}
-        />,
-      );
-    }
+    // Wie beim Vorbild: Der Name steht AUF der Karte, keine eigene
+    // Übergabe-Seite davor. Wer nicht gemeint ist, schiebt sie nicht hoch.
+    const istUndercover = current.id === state.undercoverId;
     return frame(
       <>
-        {!online && <div className="t-upper t-center">Hallo {current.name}</div>}
-        <PeekCard label="Karte hochschieben">
-          <span className="peekcard__word">{wordFor(current.id)}</span>
+        {!online && (
+          <div className="t-caption t-center">
+            {state.seen.length + 1} von {alive.length}
+          </div>
+        )}
+        <PeekCard
+          key={current.id}
+          label={online ? 'Karte hochschieben' : `${current.name} · hochschieben`}
+          onRevealed={() => setRevealed(true)}
+        >
+          {/* Die Rolle steht UNTER dem Wort: der Deckel gibt nur den unteren
+              Teil der Karte frei, eine Zeile darüber blieb verdeckt. */}
+          {istUndercover ? (
+            <span className="stack-2 t-center peekcard__low">
+              <span className="peekcard__word">{state.hint}</span>
+              <span className="t-upper">Du bist Undercover</span>
+              <span className="t-caption">Das ist nur dein Hinweis. Das Wort kennen die anderen.</span>
+            </span>
+          ) : (
+            <span className="stack-2 t-center peekcard__low">
+              <span className="peekcard__word">{state.word}</span>
+              <span className="t-upper">Dein Wort</span>
+            </span>
+          )}
         </PeekCard>
         <p className="t-sub t-center t-balance">
-          Schieb die Karte nach oben und halt sie fest, damit niemand mitliest.
+          {online
+            ? 'Schieb die Karte hoch und halt sie fest, damit niemand mitliest.'
+            : `Handy an ${current.name}. Karte hochschieben, merken, loslassen.`}
         </p>
         <button
           className="btn btn--brand btn--block btn--lg"
+          disabled={!revealed}
           onClick={() => {
             haptic('success');
-            setHandedOver(false);
+            setRevealed(false);
             send({ type: 'seen', who: current.id });
           }}
         >
-          Habe ich gesehen
+          {online ? 'Gemerkt' : 'Gemerkt – weitergeben'}
         </button>
       </>,
     );
@@ -342,7 +366,7 @@ function UndercoverGame({ state, players, me, dispatch, quit, online }: GameRunt
         )}
         <BigCard kicker="Ein Satz">
           {speaker?.id === me.id
-            ? 'Beschreibe dein Wort – ohne es zu sagen.'
+            ? 'Ein Satz zu deinem Wort – ohne es zu sagen.'
             : `${speaker?.name} beschreibt gerade.`}
         </BigCard>
         <button
@@ -402,7 +426,7 @@ function UndercoverGame({ state, players, me, dispatch, quit, online }: GameRunt
         {state.phase === 'over' && (
           <>
             {' '}
-            Die Wörter waren „{state.words[0]}" und „{state.words[1]}".
+            Das Wort war „{state.word}", der Hinweis „{state.hint}".
           </>
         )}
       </BigCard>

@@ -5,6 +5,7 @@ import { undercover } from './index';
 
 vi.mock('../../lib/haptics', () => ({ haptic: vi.fn(), setHapticsEnabled: vi.fn() }));
 import { meta } from './meta';
+import { WORDS } from './words';
 import { PartyCtx, type PartyValue } from '../../features/party/PartyContext';
 import { usePlayer, defaultProfile } from '../../store/player';
 import { useApp } from '../../store/app';
@@ -102,15 +103,25 @@ describe('Undercover auf einem geteilten Handy', () => {
     // `player={current}` wuerde bei jeder Uebergabe denselben Namen zeigen und
     // trotzdem durchlaufen - der Lauf saehe es nicht, die Runde am Tisch schon.
     const gesehen: string[] = [];
+    const rollen: string[] = [];
     for (let i = 0; i < players.length; i++) {
-      const knopf = screen.getByRole('button', { name: /^Ich bin / });
-      gesehen.push(knopf.textContent!.replace('Ich bin ', '').trim());
-      fireEvent.click(knopf);
-      fireEvent.click(screen.getByRole('button', { name: 'Habe ich gesehen' }));
+      // Keine Übergabe-Seite mehr: der Name steht auf der Karte selbst.
+      expect(screen.queryByRole('button', { name: /^Ich bin / })).toBeNull();
+      const weiter = screen.getByRole('button', { name: 'Gemerkt – weitergeben' });
+      expect((weiter as HTMLButtonElement).disabled, 'weitergeben ohne hinzusehen').toBe(true);
+      const karte = screen.getByRole('button', { name: / · hochschieben$/ });
+      gesehen.push(karte.getAttribute('aria-label')!.replace(' · hochschieben', ''));
+      fireEvent.keyDown(karte, { key: 'Enter' });
+      rollen.push(document.querySelector('.peekcard__under')!.textContent!);
+      fireEvent.click(weiter);
     }
     expect(new Set(gesehen).size, `dieselbe Person mehrfach: ${gesehen.join(', ')}`).toBe(
       players.length,
     );
+    // Genau eine Karte sagt es, und sie zeigt den Hinweis statt des Worts.
+    const verdeckt = rollen.filter((t) => t.includes('Du bist Undercover'));
+    expect(verdeckt).toHaveLength(1);
+    expect(rollen.filter((t) => t.includes('Dein Wort'))).toHaveLength(players.length - 1);
     expect(screen.getByRole('button', { name: /Gesagt/ })).toBeTruthy();
   });
 });
@@ -163,7 +174,7 @@ describe('Undercover: der letzte Rateversuch', () => {
     const s = enttarnt(players);
     expect(s.phase).toBe('guess');
     expect(s.guessOptions).toHaveLength(3);
-    expect(s.guessOptions).toContain(s.words[0]);
+    expect(s.guessOptions).toContain(s.word);
     expect(new Set(s.guessOptions).size, 'ein Wort stand doppelt').toBe(3);
   });
 
@@ -171,7 +182,7 @@ describe('Undercover: der letzte Rateversuch', () => {
     const players = runde(4);
     let s = enttarnt(players);
     const punkteVorher = s.agentWins;
-    s = tun(s, { type: 'guess', word: s.words[0] }, players);
+    s = tun(s, { type: 'guess', word: s.word }, players);
     expect(s.winner).toBe('undercover');
     expect(s.agentWins).toBe(punkteVorher + 1);
     expect(s.phase).toBe('over');
@@ -180,7 +191,7 @@ describe('Undercover: der letzte Rateversuch', () => {
   it('gibt der Gruppe den Punkt, wenn er danebenliegt', () => {
     const players = runde(4);
     let s = enttarnt(players);
-    const falsch = s.guessOptions.find((w) => w !== s.words[0])!;
+    const falsch = s.guessOptions.find((w) => w !== s.word)!;
     const punkteVorher = s.groupWins;
     s = tun(s, { type: 'guess', word: falsch }, players);
     expect(s.winner).toBe('gruppe');
@@ -218,5 +229,34 @@ describe('Undercover: Abwechslung', () => {
     s = tun(s, { type: 'continue' }, players);
     expect(s.order[0]).not.toBe(ersterVorher);
     expect(s.turnIndex).toBe(0);
+  });
+});
+
+describe('Undercover: Hinweise', () => {
+  it('gibt nie das Wort selbst als Hinweis, und jedes Wort gibt es nur einmal', () => {
+    for (const w of WORDS) {
+      expect(w.hints.map((h) => h.toLowerCase()), w.word).not.toContain(w.word.toLowerCase());
+      expect(new Set(w.hints).size, w.word).toBe(3);
+    }
+    expect(new Set(WORDS.map((w) => w.word)).size).toBe(WORDS.length);
+  });
+
+  it('bietet beim Raten nur Wörter derselben Kategorie an', () => {
+    for (let i = 0; i < 30; i++) {
+      const players = runde(4);
+      let s = bisVote(players);
+      const stimmen = Object.fromEntries(players.map((p) => [p.id, s.undercoverId]));
+      s = abstimmen(s, players, stimmen);
+      const kat = new Set(s.guessOptions.map((o) => WORDS.find((w) => w.word === o)!.category));
+      expect(kat.size).toBe(1);
+      expect(WORDS.find((w) => w.word === s.word)!.hints).toContain(s.hint);
+    }
+  });
+
+  it('lässt Undercover nie als Erste beschreiben', () => {
+    for (let i = 0; i < 50; i++) {
+      const s = undercover.createState(runde(4));
+      expect(s.order[0]).not.toBe(s.undercoverId);
+    }
   });
 });

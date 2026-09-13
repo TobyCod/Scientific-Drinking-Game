@@ -1840,6 +1840,28 @@ button.chip--outline {
   text-align: center;
   margin: 0;
 }
+/* Brennweite wie in der Kamera-App: runde Werte in einer dunklen Pille. */
+.lensswitch {
+  display: flex;
+  gap: var(--s-1);
+  padding: 4px;
+  border-radius: 999px;
+  background: rgba(0, 0, 0, 0.45);
+}
+.lensswitch__opt {
+  min-width: 44px;
+  height: 44px;
+  border: none;
+  border-radius: 50%;
+  background: transparent;
+  color: #fff;
+  font: 600 13px/1 var(--font);
+  font-variant-numeric: tabular-nums;
+}
+.lensswitch__opt.is-on {
+  background: rgba(255, 255, 255, 0.18);
+  color: #ffd60a;
+}
 .shutter {
   width: 76px;
   height: 76px;
