@@ -1,8 +1,8 @@
 import { haptic } from '../../lib/haptics';
+import { sound } from '../../lib/sound';
 import { shuffle } from '../../lib/format';
 import { Icon } from '../../components/icons';
 import { GameFrame } from '../shared/GameFrame';
-import { PeekCard } from '../shared/PeekCard';
 import { GameOver } from '../shared/GameOver';
 import { DrinkCall } from '../shared/DrinkCall';
 import { BigCard, PlayerChip } from '../shared/pieces';
@@ -197,6 +197,9 @@ function MaexchenGame({ state, players, me, dispatch, quit, online }: GameRuntim
   const canDecide = !online || decider?.id === me.id;
 
   const options = announceOptions(state.previous);
+  // Nur wer würfelt, sieht seinen Wurf – online sehen die anderen die
+  // Tabelle ohne Markierung.
+  const mine = canAnnounce && state.dice ? rankOf(state.dice) : null;
 
   if (state.phase === 'over') {
     const ranking = players.map((p) => ({
@@ -279,6 +282,7 @@ function MaexchenGame({ state, players, me, dispatch, quit, online }: GameRuntim
             disabled={!canAnnounce}
             onClick={() => {
               haptic('heavy');
+              sound('dice');
               send({ type: 'roll' });
             }}
           >
@@ -289,38 +293,35 @@ function MaexchenGame({ state, players, me, dispatch, quit, online }: GameRuntim
 
       {state.phase === 'announce' && (
         <>
-          <PeekCard label="Becher anheben">
-            {state.dice && canAnnounce ? (
-              <span className="row" style={{ gap: 14 }}>
-                <Die value={state.dice[0]} />
-                <Die value={state.dice[1]} />
-              </span>
-            ) : (
-              <span className="t-sub">Nicht dein Wurf.</span>
-            )}
-          </PeekCard>
           <p className="t-sub t-center t-balance">
-            {state.previous === MAEXCHEN
-              ? 'Mäxchen steht. Nur ein eigenes Mäxchen hält dagegen – sonst hilft nur aufdecken lassen.'
-              : 'Sag jetzt an – die Wahrheit oder etwas Höheres. Niemand sieht deinen Wurf.'}
+            {!canAnnounce
+              ? `${announcer?.name} sagt gleich an.`
+              : mine !== null && state.previous !== null && mine <= state.previous && mine !== MAEXCHEN
+                ? 'Dein Wurf reicht nicht. Sag etwas Höheres an – oder lass es darauf ankommen.'
+                : state.previous === MAEXCHEN
+                  ? 'Mäxchen steht. Nur ein eigenes Mäxchen hält dagegen – sonst hilft nur aufdecken lassen.'
+                  : 'Sag jetzt an – die Wahrheit oder etwas Höheres. Halt das Handy verdeckt.'}
           </p>
           <p className="t-caption t-center">
             Reihenfolge: gemischte Würfe, dann Pasch, dann Mäxchen.
           </p>
+          {/* Die ganze Rangfolge, nicht nur das Erlaubte: Wer seinen Wurf in
+              der Tabelle sieht, sieht auch, wie weit er bluffen müsste. */}
           <div className="rankgrid">
-            {options.map((i) => (
+            {RANKS.map((_, i) => (
               <button
                 key={i}
                 className={`rankchip pressable ${RANKS[i] === '21' ? 'rankchip--max' : ''} ${
                   isPair(i) ? 'rankchip--pair' : ''
-                }`}
-                disabled={!canAnnounce}
+                } ${i === mine ? 'rankchip--mine' : ''}`}
+                disabled={!canAnnounce || !options.includes(i)}
                 onClick={() => {
                   haptic('select');
                   send({ type: 'announce', rank: i });
                 }}
               >
                 {rankShort(i)}
+                {i === mine && <span className="rankchip__mine">dein Wurf</span>}
               </button>
             ))}
           </div>
@@ -345,6 +346,7 @@ function MaexchenGame({ state, players, me, dispatch, quit, online }: GameRuntim
               disabled={!canDecide}
               onClick={() => {
                 haptic('warn');
+                sound('cup');
                 send({ type: 'doubt' });
               }}
             >
