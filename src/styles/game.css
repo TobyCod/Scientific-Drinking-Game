@@ -916,6 +916,10 @@
   position: relative;
   z-index: 1;
 }
+/* Mehrzeiliger Inhalt sitzt unten: der Deckel gibt nur den unteren Teil frei. */
+.peekcard__low {
+  align-self: end;
+}
 /* Entwickelt: genau an der Leseschwelle, wo auch die Haptik tickt. */
 .peekcard--open .peekcard__under {
   filter: none;
@@ -988,6 +992,9 @@
   font-weight: 800;
   letter-spacing: -0.8px;
   text-wrap: balance;
+  /* Ein Wort wie „Junggesellenabschied" ist breiter als die Karte. */
+  hyphens: auto;
+  overflow-wrap: anywhere;
   color: #fff;
   text-shadow: 0 2px 12px rgba(0, 0, 0, 0.5);
 }

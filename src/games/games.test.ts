@@ -804,7 +804,7 @@ describe('Undercover', () => {
     const roster = players(6);
     const s = game.createState(roster);
     expect(roster.map((p) => p.id)).toContain(s.undercoverId);
-    expect(s.words[0]).not.toBe(s.words[1]);
+    expect(s.hint).not.toBe(s.word);
   });
 
   it('startet die Beschreibungsrunde, wenn alle ihr Wort gesehen haben', () => {
@@ -824,9 +824,9 @@ describe('Undercover', () => {
     for (const p of roster) s = game.reduce(s, act('vote', p.id, { target: s.undercoverId }), roster);
     expect(s.phase).toBe('guess');
     expect(s.eliminated).toContain(s.undercoverId);
-    expect(s.guessOptions).toContain(s.words[0]);
+    expect(s.guessOptions).toContain(s.word);
 
-    const daneben = s.guessOptions.find((w: string) => w !== s.words[0])!;
+    const daneben = s.guessOptions.find((w: string) => w !== s.word)!;
     s = game.reduce(s, act('guess', s.undercoverId, { word: daneben }), roster);
     expect(s.phase).toBe('over');
     expect(s.winner).toBe('gruppe');

@@ -11,6 +11,8 @@ import { FilmSetup } from './FilmSetup';
 import { usePhotoUrl } from './usePhotoUrl';
 import { makePrint } from './print';
 import { sweepOrphans } from './sweep';
+import { NightReview } from '../bac/NightReview';
+import { usePlayer } from '../../store/player';
 
 /**
  * Das Album des Abends.
@@ -25,6 +27,8 @@ export function AlbumScreen() {
   const nights = useNights((s) => s.nights);
   const { remaining, mineLeft, running } = useFilmStatus();
   const [open, setOpen] = useState<Photo | null>(null);
+  const [reviewOpen, setReviewOpen] = useState(false);
+  const endNight = usePlayer((s) => s.endNight);
 
   // Bilder ohne Abend wegräumen – siehe `sweep.ts`.
   useEffect(() => {
@@ -64,6 +68,16 @@ export function AlbumScreen() {
             >
               <Icon name="camera" size={18} /> Foto machen
             </button>
+            {/* Hier sucht man es: wer den Film abschließt, schließt den Abend. */}
+            <button
+              className="btn btn--glass btn--block"
+              onClick={() => {
+                haptic('press');
+                setReviewOpen(true);
+              }}
+            >
+              Abend beenden
+            </button>
           </section>
         )}
 
@@ -94,6 +108,7 @@ export function AlbumScreen() {
       </div>
 
       <PhotoSheet photo={open} onClose={() => setOpen(null)} />
+      <NightReview open={reviewOpen} onClose={() => setReviewOpen(false)} onEnd={endNight} />
     </div>
   );
 }
