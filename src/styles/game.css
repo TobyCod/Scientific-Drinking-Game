@@ -1378,6 +1378,26 @@
   border-color: color-mix(in srgb, var(--accent) 28%, transparent);
 }
 
+/* Der eigene Wurf: steht nach den Varianten, damit er sie überschreibt. Auch
+   ausgegraut (Wurf reicht nicht) bleibt er lesbar. */
+.rankchip--mine {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  line-height: 1.1;
+  background: var(--label);
+  border-color: var(--label);
+  color: var(--bg);
+}
+.rankchip--mine:disabled {
+  opacity: 0.75;
+}
+.rankchip__mine {
+  font-size: var(--t-caption);
+  font-weight: 600;
+}
+
 /* ---------- Tabu: Punktestand ---------- */
 .scoreboard {
   display: grid;

@@ -24,7 +24,7 @@ import { useApp } from '../../store/app';
 import { usePlayer } from '../../store/player';
 import { PreloadSheet } from '../drinks/PreloadSheet';
 import { LogDrinkSheet } from '../../games/shared/LogDrinkSheet';
-import { TableTally } from '../drinks/TableTally';
+import { formatGlassCount, tally } from '../../engine/tally';
 
 export function LobbyScreen() {
   const party = useParty();
@@ -35,9 +35,11 @@ export function LobbyScreen() {
   const [code, setCode] = useState('');
   const [busy, setBusy] = useState(false);
   const [preloadOpen, setPreloadOpen] = useState(false);
-  const [logOpen, setLogOpen] = useState(false);
+  const [logFor, setLogFor] = useState<string | null>(null);
   const preloadAskedAt = usePlayer((s) => s.preloadAskedAt);
   const alcoholFree = usePlayer((s) => s.profile?.alcoholFree ?? false);
+  const myLog = usePlayer((s) => s.log);
+  const customDrinks = usePlayer((s) => s.customDrinks);
   const lastCode = useApp((s) => s.lastLobbyCode);
   const markGamePlayed = useApp((s) => s.markGamePlayed);
 
@@ -200,18 +202,50 @@ export function LobbyScreen() {
           <div className="list">
             {players.map((p) => (
               <div key={p.id} className="list__item">
-                <Avatar name={p.name} color={p.color} photo={p.photo} size="sm" />
-                <span className="grow">
-                  <span className="t-headline" style={{ display: 'block' }}>
-                    {p.name} {p.id === party.me.id && <span className="t-caption">(du)</span>}
-                  </span>
-                  <span className="t-caption row" style={{ gap: 5 }}>
-                    {p.isHost && <>Host ·</>}
-                    <Icon name={p.driver ? 'car' : (p.drinkIcon ?? 'water')} size={13} />
-                    {p.driver && <span className="drivertag">fährt</span>}
-                    {p.online === false && <>· offline</>}
-                  </span>
-                </span>
+                {(() => {
+                  // Gläser stehen hier statt in einer zweiten Liste darunter:
+                  // „wer mitspielt" soll nur einmal auf der Seite stehen.
+                  const log = p.id === party.me.id ? myLog : p.local?.log;
+                  const t = log?.length ? tally(log, customDrinks) : null;
+                  const inhalt = (
+                    <>
+                      <Avatar name={p.name} color={p.color} photo={p.photo} size="sm" />
+                      <span className="grow">
+                        <span className="t-headline" style={{ display: 'block' }}>
+                          {p.name} {p.id === party.me.id && <span className="t-caption">(du)</span>}
+                        </span>
+                        <span className="t-caption row wrap" style={{ gap: 5 }}>
+                          {p.isHost && <>Host ·</>}
+                          <Icon name={p.driver ? 'car' : (p.drinkIcon ?? 'water')} size={13} />
+                          {p.driver && <span className="drivertag">fährt</span>}
+                          {t && (
+                            <span style={{ whiteSpace: 'nowrap' }}>
+                              {formatGlassCount(t.glasses)}
+                              {t.rows.length === 1 && ` · ${t.rows[0].name}`}
+                            </span>
+                          )}
+                          {p.online === false && <>· offline</>}
+                        </span>
+                      </span>
+                    </>
+                  );
+                  // Online gehört jedes Handy einer Person: Eintragen geht nur für sich.
+                  return log ? (
+                    <button
+                      className="row grow pressable"
+                      style={{ textAlign: 'left' }}
+                      aria-label={`Getränk für ${p.name} eintragen`}
+                      onClick={() => {
+                        haptic('tap');
+                        setLogFor(p.id);
+                      }}
+                    >
+                      {inhalt}
+                    </button>
+                  ) : (
+                    <span className="row grow">{inhalt}</span>
+                  );
+                })()}
                 {p.local && (
                   <>
                     <button className="btn btn--plain" onClick={() => setEditing(p)}>
@@ -229,11 +263,8 @@ export function LobbyScreen() {
               </div>
             ))}
           </div>
-          {/* Wer wie viel hat – erst, wenn jemand etwas eingetragen hat; eine
-              frische Runde bleibt so aufgeräumt wie vorher. */}
-          <TableTally hideEmpty />
-          <button className="btn btn--glass btn--block" onClick={() => setLogOpen(true)}>
-            <Icon name="plus" size={17} /> Getrunken eintragen
+          <button className="btn btn--glass btn--block" onClick={() => setLogFor(party.me.id)}>
+            <Icon name="plus" size={17} /> Getränk eintragen
           </button>
           {players.length < 2 && (
             <div className="notice notice--neutral">
@@ -290,10 +321,11 @@ export function LobbyScreen() {
       <AddPlayerSheet open={editing !== null} onClose={() => setEditing(null)} edit={editing} />
       <PreloadSheet open={preloadOpen} onClose={() => setPreloadOpen(false)} />
       <LogDrinkSheet
-        open={logOpen}
-        onClose={() => setLogOpen(false)}
+        open={logFor !== null}
+        onClose={() => setLogFor(null)}
         players={online ? [party.me] : players}
         meId={party.me.id}
+        initialPlayerId={logFor ?? undefined}
         onLog={(playerId, d, sips, at) =>
           party.logSipsFor(playerId, sips, 'manuell', { drinkId: d.id, at })
         }

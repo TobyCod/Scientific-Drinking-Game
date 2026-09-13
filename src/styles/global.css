@@ -1037,6 +1037,11 @@ button.chip--outline {
   font-weight: 650;
   line-height: 1.2;
 }
+.drinktile__vol {
+  font-size: 11px;
+  color: var(--label-2);
+  font-variant-numeric: tabular-nums;
+}
 /* Mitten im Spiel zaehlt Hoehe: vier statt drei Spalten, damit unter dem
    Raster noch Zielpegel und Schalter ins Bild passen. */
 .drinkgrid--compact {

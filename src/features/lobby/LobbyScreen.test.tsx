@@ -5,6 +5,8 @@ import { LobbyScreen } from './LobbyScreen';
 import { PartyCtx, type PartyValue } from '../party/PartyContext';
 import { defaultProfile, usePlayer } from '../../store/player';
 import type { GamePlayer } from '../../games/types';
+import { findDrink, sipsPerServing } from '../../engine/drinks';
+import { makeDrinkEvent } from '../../engine/sips';
 
 const me: GamePlayer = { id: 'me', name: 'Paul', color: 'blue', online: true, isHost: true };
 
@@ -172,5 +174,49 @@ describe('Mitspieler auf diesem Handy', () => {
     expect(profile.designatedDriver).toBe(false);
     expect(profile.alcoholFree).toBe(false);
     expect(drinkId).toBe('beer-pils');
+  });
+});
+
+describe('Wer mitspielt, steht einmal', () => {
+  const mia: GamePlayer = {
+    id: 'p1',
+    name: 'Mia',
+    color: 'pink',
+    online: true,
+    local: {
+      profile: { ...defaultProfile(), name: 'Mia' },
+      drinkId: 'wine-red',
+      log: [makeDrinkEvent(findDrink('wine-red'), sipsPerServing(findDrink('wine-red')), 'glas')],
+    },
+  };
+
+  beforeEach(() => {
+    usePlayer.setState({ profile: { ...defaultProfile(), name: 'Paul' }, onboarded: true, log: [], customDrinks: [] });
+  });
+
+  it('zeigt die Gläser in der Spielerzeile statt in einem zweiten Tisch', () => {
+    // Rückmeldung aus dem Test: „Das muss nicht zweimal stehen, wer mitspielt."
+    render(
+      <MemoryRouter initialEntries={['/lobby']}>
+        <PartyCtx.Provider value={party({ players: [me, mia] })}>
+          <LobbyScreen />
+        </PartyCtx.Provider>
+      </MemoryRouter>,
+    );
+    expect(screen.queryByText('Der Tisch')).toBeNull();
+    expect(screen.getAllByText('Mia')).toHaveLength(1);
+    expect(screen.getByText(/1 Glas · Rotwein/)).toBeTruthy();
+  });
+
+  it('öffnet beim Tipp auf den Namen das Eintragen für diese Person', () => {
+    render(
+      <MemoryRouter initialEntries={['/lobby']}>
+        <PartyCtx.Provider value={party({ players: [me, mia] })}>
+          <LobbyScreen />
+        </PartyCtx.Provider>
+      </MemoryRouter>,
+    );
+    fireEvent.click(screen.getByRole('button', { name: 'Getränk für Mia eintragen' }));
+    expect(screen.getByRole('button', { name: 'Mia' })).toHaveAttribute('aria-pressed', 'true');
   });
 });
