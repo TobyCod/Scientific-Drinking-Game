@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { render, screen, within } from '@testing-library/react';
+import { screen, within } from '@testing-library/react';
+import { render } from '../../test/render';
 import { maexchen } from './index';
 import { PartyCtx, type PartyValue } from '../../features/party/PartyContext';
 import { usePlayer, defaultProfile } from '../../store/player';

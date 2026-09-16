@@ -107,6 +107,8 @@ const VARIANTS: Record<string, unknown>[] = [
   // `handVariants()` aus dem Zustand. `card` ist dasselbe fuer die einzelne
   // Karte, die im Busfahrer auf die Pyramide gelegt wird.
   { cards: [], card: -1, to: '' },
+  // Lückenfüller: Text zu einer Blankokarte.
+  { texts: ['frei geschrieben'] },
   // Ring of Fire: der Finger waehlt einen Platz im Kranz. 51 prueft den Rand,
   // 200 einen Platz, den es gar nicht gibt.
   { slot: 51 },

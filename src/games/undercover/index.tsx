@@ -24,8 +24,8 @@ interface State {
   hint: string;
   undercoverId: string;
   seen: string[];
+  /** Sitzreihenfolge; `order[0]` fängt an, dann reihum. */
   order: string[];
-  turnIndex: number;
   votes: Record<string, string>;
   eliminated: string[];
   lastOut: string | null;
@@ -41,8 +41,6 @@ interface State {
   /** Bei Stimmengleichstand hat das Los entschieden. Die Runde soll das sehen –
    *  vorher entschied still die Reihenfolge der Stimmabgabe. */
   tie: boolean;
-  /** Wer zuletzt Undercover war, damit es nicht zweimal dieselbe Person wird. */
-  lastUndercoverId: string | null;
   /** Nur in `guess`: die Wörter, unter denen der Enttarnte wählen darf. */
   guessOptions: string[];
   /** Was er geraten hat. */
@@ -62,33 +60,27 @@ function guessChoices(civilian: string): string[] {
 }
 
 /** Was eine neue Runde aus der alten mitnimmt: Ziellinie und Punktestand. */
-type Carry = Pick<State, 'goal' | 'groupWins' | 'agentWins' | 'lastUndercoverId'>;
+type Carry = Pick<State, 'goal' | 'groupWins' | 'agentWins'>;
 
 function newRound(players: GamePlayer[], round: number, carry: Carry): State {
   const alive = players.map((p) => p.id);
   const { word, hints } = pick(WORDS);
-  // „Oft ist die gleiche Person der Imposter" ist die haeufigste Beschwerde bei
-  // den Vertretern dieses Genres. Wer zuletzt dran war, faellt raus - solange
-  // ueberhaupt jemand anders da ist.
-  const wahl = alive.filter((id) => id !== carry.lastUndercoverId);
-  const undercoverId = pick(wahl.length ? wahl : alive);
-  // Undercover beginnt nie: wer als Erstes beschreibt, hat nichts gehört,
-  // woran er sich anlehnen könnte.
+  // Reines Los (User-Entscheid 2026-09-16): Undercover darf mehrmals
+  // hintereinander dran sein und auch als Erstes reden. Jede Sperre verrät
+  // etwas – wer letzte Runde dran war oder anfängt, wäre sonst entlastet.
+  const undercoverId = pick(alive);
   const order = shuffle(alive);
-  if (order[0] === undercoverId && order.length > 1) order.push(order.shift()!);
   return {
     ...carry,
     phase: 'reveal',
     word,
     hint: pick(hints),
     undercoverId,
-    lastUndercoverId: undercoverId,
     tie: false,
     guessOptions: [],
     guessed: null,
     seen: [],
     order,
-    turnIndex: 0,
     votes: {},
     eliminated: [],
     lastOut: null,
@@ -105,7 +97,6 @@ export const undercover: GameDefinition<State> = {
       goal: roundGoal(ROUND_BASE),
       groupWins: 0,
       agentWins: 0,
-      lastUndercoverId: null,
     }),
 
   reduce: (state, action, players) => {
@@ -123,12 +114,9 @@ export const undercover: GameDefinition<State> = {
         const done = alive.every((p) => seen.includes(p.id));
         return { ...state, seen, phase: done ? 'describe' : 'reveal' };
       }
-      case 'nextSpeaker': {
+      case 'startVote': {
         if (state.phase !== 'describe') return state;
-        const next = state.turnIndex + 1;
-        const speakers = state.order.filter((id) => !state.eliminated.includes(id));
-        if (next >= speakers.length) return { ...state, phase: 'vote', turnIndex: 0 };
-        return { ...state, turnIndex: next };
+        return { ...state, phase: 'vote' };
       }
       case 'vote': {
         if (state.phase !== 'vote') return state;
@@ -193,7 +181,7 @@ export const undercover: GameDefinition<State> = {
         // dieselbe anfaengt – auch das eine belegte Beschwerde bei
         // vergleichbaren Apps.
         const order = state.order.length ? [...state.order.slice(1), state.order[0]] : state.order;
-        return { ...state, phase: 'describe', votes: {}, turnIndex: 0, order };
+        return { ...state, phase: 'describe', votes: {}, order };
       }
       case 'newRound': {
         // Nur aus einer entschiedenen Runde heraus. Zwei fast gleichzeitige
@@ -207,7 +195,6 @@ export const undercover: GameDefinition<State> = {
           goal: state.goal,
           groupWins: state.groupWins,
           agentWins: state.agentWins,
-          lastUndercoverId: state.undercoverId,
         });
       }
       case 'restart':
@@ -350,30 +337,31 @@ function UndercoverGame({ state, players, me, dispatch, quit, online }: GameRunt
   }
 
   if (state.phase === 'describe') {
-    const speakers = state.order.filter((id) => !state.eliminated.includes(id));
-    const speaker = byId(speakers[state.turnIndex % Math.max(1, speakers.length)]);
+    // Ein Bildschirm statt „Gesagt – weiter" je Person (User-Entscheid
+    // 2026-09-16): am Tisch klickt beim Reden niemand weiter. Die App sagt nur,
+    // wer anfängt; danach geht es reihum, bis jemand zur Abstimmung ruft.
+    const erster = byId(state.order.find((id) => !state.eliminated.includes(id)) ?? null);
     return (
       <GameFrame
         title={undercover.name}
         accent={undercover.accent}
-        subtitle={`Runde ${state.round} · ${state.turnIndex + 1}/${speakers.length}`}
+        subtitle={`Runde ${state.round} · Beschreiben`}
         onQuit={quit}
       >
-        {speaker && (
+        {erster && (
           <div className="row" style={{ justifyContent: 'center' }}>
-            <PlayerChip player={speaker} note={speaker.id === me.id ? 'du bist dran' : 'beschreibt'} />
+            <PlayerChip player={erster} note={erster.id === me.id ? 'du fängst an' : 'fängt an'} />
           </div>
         )}
-        <BigCard kicker="Ein Satz">
-          {speaker?.id === me.id
-            ? 'Ein Satz zu deinem Wort – ohne es zu sagen.'
-            : `${speaker?.name} beschreibt gerade.`}
+        <BigCard kicker="Reihum ein Satz">
+          {erster?.id === me.id ? 'Du fängst' : `${erster?.name} fängt`} an, dann reihum im
+          Kreis. Jeder sagt einen Satz zu seinem Wort – ohne es zu nennen.
         </BigCard>
         <button
           className="btn btn--brand btn--block btn--lg"
-          onClick={() => send({ type: 'nextSpeaker' })}
+          onClick={() => send({ type: 'startVote' })}
         >
-          Gesagt – weiter
+          Alle dran gewesen – abstimmen
         </button>
       </GameFrame>
     );
