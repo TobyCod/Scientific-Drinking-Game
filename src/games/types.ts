@@ -132,6 +132,8 @@ export interface GameMeta {
   allowCustomCards?: boolean;
   /** true = das Spiel hat zusätzliche Spicy-Inhalte, die sich zuschalten lassen. */
   allowSpicy?: boolean;
+  /** true = das Spiel lässt sich mit Blankokarten spielen (selbst beschriebene Antworten). */
+  allowBlanks?: boolean;
   /** Kategorien des Spiels, falls es welche hat (für eigene Karten). */
   modes?: { id: string; label: string; icon?: IconName; tone?: string }[];
   howTo: string[];

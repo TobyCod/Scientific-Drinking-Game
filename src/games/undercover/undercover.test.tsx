@@ -1,5 +1,6 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { fireEvent, render, screen } from '@testing-library/react';
+import { fireEvent, screen } from '@testing-library/react';
+import { render } from '../../test/render';
 import { useState } from 'react';
 import { undercover } from './index';
 
@@ -33,12 +34,10 @@ function alleGesehen(s: State, players: GamePlayer[]): State {
   return next;
 }
 
-/** Von `reveal` bis zur Abstimmung: alle schauen, dann beschreiben alle. */
+/** Von `reveal` bis zur Abstimmung: alle schauen, dann ein Tipp auf „abstimmen". */
 function bisVote(players: GamePlayer[], start?: State): State {
-  let s = alleGesehen(start ?? undercover.createState(players), players);
-  const lebende = players.filter((p) => !s.eliminated.includes(p.id)).length;
-  for (let i = 0; i < lebende; i++) s = tun(s, { type: 'nextSpeaker' }, players);
-  return s;
+  const s = alleGesehen(start ?? undercover.createState(players), players);
+  return tun(s, { type: 'startVote' }, players);
 }
 
 /** Alle stimmen ab. Der Schluessel ist der Waehler, der Wert sein Ziel. */
@@ -122,7 +121,7 @@ describe('Undercover auf einem geteilten Handy', () => {
     const verdeckt = rollen.filter((t) => t.includes('Du bist Undercover'));
     expect(verdeckt).toHaveLength(1);
     expect(rollen.filter((t) => t.includes('Dein Wort'))).toHaveLength(players.length - 1);
-    expect(screen.getByRole('button', { name: /Gesagt/ })).toBeTruthy();
+    expect(screen.getByRole('button', { name: /abstimmen/ })).toBeTruthy();
   });
 });
 
@@ -200,21 +199,23 @@ describe('Undercover: der letzte Rateversuch', () => {
 });
 
 describe('Undercover: Abwechslung', () => {
-  it('macht nicht zweimal hintereinander dieselbe Person zum Undercover', () => {
-    // „Oft ist die gleiche Person der Imposter" ist die haeufigste Beschwerde
-    // bei den Vertretern dieses Genres.
+  it('lost Undercover frei aus – auch zweimal hintereinander dieselbe Person', () => {
+    // User-Entscheid 2026-09-16: eine Sperre entlastet den Vorgänger.
     const players = runde(4);
     let s = undercover.createState(players);
-    for (let i = 0; i < 40; i++) {
+    let wiederholt = 0;
+    for (let i = 0; i < 60; i++) {
       const vorher = s.undercoverId;
       let n = bisVote(players, s);
       const stimmen = Object.fromEntries(players.map((p) => [p.id, n.undercoverId]));
       n = abstimmen(n, players, stimmen);
       n = tun(n, { type: 'guess', word: 'daneben' }, players);
       n = tun(n, { type: 'newRound' }, players);
-      expect(n.undercoverId, `Runde ${i}: zweimal dieselbe Person`).not.toBe(vorher);
+      expect(n.phase, 'Partie vorzeitig zu Ende').toBe('reveal');
+      if (n.undercoverId === vorher) wiederholt++;
       s = n;
     }
+    expect(wiederholt).toBeGreaterThan(0);
   });
 
   it('lässt nicht immer dieselbe Person anfangen', () => {
@@ -228,7 +229,6 @@ describe('Undercover: Abwechslung', () => {
     expect(s.phase, 'unerwarteter Pfad').toBe('result');
     s = tun(s, { type: 'continue' }, players);
     expect(s.order[0]).not.toBe(ersterVorher);
-    expect(s.turnIndex).toBe(0);
   });
 });
 
@@ -253,10 +253,19 @@ describe('Undercover: Hinweise', () => {
     }
   });
 
-  it('lässt Undercover nie als Erste beschreiben', () => {
-    for (let i = 0; i < 50; i++) {
+  it('lässt auch Undercover als Erste beschreiben', () => {
+    let erste = 0;
+    for (let i = 0; i < 200; i++) {
       const s = undercover.createState(runde(4));
-      expect(s.order[0]).not.toBe(s.undercoverId);
+      if (s.order[0] === s.undercoverId) erste++;
     }
+    expect(erste).toBeGreaterThan(0);
+  });
+
+  it('springt aus dem Beschreiben direkt zur Abstimmung, sonst nirgends', () => {
+    const players = runde(4);
+    const start = undercover.createState(players);
+    expect(tun(start, { type: 'startVote' }, players).phase).toBe('reveal');
+    expect(bisVote(players, start).phase).toBe('vote');
   });
 });

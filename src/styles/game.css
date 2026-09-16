@@ -1822,6 +1822,8 @@
    55 % abgeloest. Das Umdrehen ist damit ein eigener Schlag, kein Mitdrehen
    auf der Strecke (User-Entscheid 2026-09-10). Eine gestauchte Vorderseite
    waere lesbar gewesen und haette den Schlag vorweggenommen. */
+/* Ohne Flug unsichtbar: nur das ziehende Handy misst einen Weg. Auf allen
+   anderen bliebe die Rueckseite sonst liegen und verdeckte die Karte. */
 .kings-zug__ruecken {
   position: absolute;
   inset: 0;
@@ -1829,6 +1831,7 @@
   align-items: center;
   justify-content: center;
   pointer-events: none;
+  opacity: 0;
 }
 .kings-zug--los .kings-zug__ruecken {
   animation: kings-ruecken 380ms linear both;
@@ -1900,6 +1903,12 @@
   box-shadow: var(--shadow-md);
   position: relative;
   transition: transform var(--dur-fast) var(--ease-spring);
+}
+.lf-card--blank {
+  /* Gestrichelt wie ein leeres Formularfeld: sofort als „hier schreibst du"
+     lesbar, ohne eigene Farbe neben den weissen Karten. */
+  border: 2px dashed #999;
+  color: #555;
 }
 .lf-card--picked {
   transform: translateY(-10px);

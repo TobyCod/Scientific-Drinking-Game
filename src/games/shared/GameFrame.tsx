@@ -1,5 +1,6 @@
 import { Icon } from '../../components/icons';
 import { useEffect, useState, type ReactNode } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { Sheet } from '../../components/ui';
 import { haptic } from '../../lib/haptics';
 import { keepScreenAwake } from '../../lib/wakelock';
@@ -30,6 +31,7 @@ export function GameFrame({
   children,
 }: Props) {
   const [askQuit, setAskQuit] = useState(false);
+  const nav = useNavigate();
   // Jedes Spiel läuft in diesem Rahmen – hier gilt die Sperre für alle 17 und
   // fällt beim Verlassen von selbst wieder weg.
   useEffect(() => keepScreenAwake(), []);
@@ -46,6 +48,19 @@ export function GameFrame({
           }}
         >
           <Icon name="close" size={16} strokeWidth={2.1} />
+        </button>
+        {/* Einwegkamera mitten im Spiel: der Spielstand liegt im
+            PartyContext und überlebt den Abstecher, zurück geht es per
+            Schließen im Sucher. Links, damit der Kopf symmetrisch bleibt. */}
+        <button
+          className="game__close"
+          aria-label="Einwegkamera"
+          onClick={() => {
+            haptic('tap');
+            nav('/kamera');
+          }}
+        >
+          <Icon name="camera" size={18} />
         </button>
         <div className="game__titles">
           <div className="t-headline">{title}</div>
