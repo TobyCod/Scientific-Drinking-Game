@@ -197,7 +197,7 @@ export function LobbyScreen() {
         <section className="stack-3">
           <div className="row-between">
             <h2 className="t-title2">
-              {players.length} {players.length === 1 ? 'Spieler' : 'Spieler'}
+              {players.length} Spieler
             </h2>
             {!online && (
               <button className="btn btn--plain" onClick={() => setAddOpen(true)}>
