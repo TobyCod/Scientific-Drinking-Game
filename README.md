@@ -22,7 +22,7 @@ Handy oder mit einer Lobby, in der jede Person ihr eigenes Gerät benutzt.
 | Verlaufs- und Prognosegrafik des Pegels | fertig |
 | Lobby über 4-stelligen Code (Firebase Realtime Database) | fertig |
 | Pass-&-Play auf einem Handy, inkl. Körperdaten der Mitspieler | fertig |
-| 18 Spiele, davon 10 mit „Handy weglegen" | fertig |
+| 19 Spiele, davon 10 mit „Handy weglegen" | fertig |
 | Plugin-System für neue Spiele | fertig |
 | Alkoholfreier Modus, Altersprüfung, Wasser-Erinnerung | fertig |
 | Dark & Light Mode, installierbar als PWA-Shortcut | fertig |
@@ -35,6 +35,7 @@ Handy oder mit einer Lobby, in der jede Person ihr eigenes Gerät benutzt.
 | Eigene Karten pro Spiel, anonyme Gruppen-Pegelanzeige | fertig |
 | Spieleinladung: startet jemand, fragt die App „mitspielen?" | fertig |
 | Spicy-Modus je Spiel (ab 18, zuschaltbar) | fertig |
+| Meme-Duell: Vorlagen mit Textfeldern, Trittbrett, Reaktionen, Podest, Speichern als Abzug | fertig |
 
 ### Die Spiele
 
@@ -49,7 +50,7 @@ Handy oder mit einer Lobby, in der jede Person ihr eigenes Gerät benutzt.
 | Wortbombe | Kategorie nennen und weitergeben, bevor es knallt | 1 reicht |
 | Reaktions-Duell | Handy in die Mitte, wer langsamer tippt, trinkt | 1 reicht |
 | Tabu Rush | Zwei Teams, 60 Sekunden, verbotene Wörter | 1 reicht |
-| Meme Battle | Prompt, Pointe tippen, anonym abstimmen | eigene nötig |
+| Meme-Duell | Vorlage ziehen, Text ins Bild, Meme für Meme abstimmen – 308 Vorlagen, vier Modi | eigene nötig |
 | Lückenfüller | Lückentext, Karte legen, der Richter kürt die beste | eigene nötig |
 | Schätzfrage | Alle tippen eine Zahl, am weitesten daneben trinkt | eigene nötig |
 | Zwei Wahrheiten, eine Lüge | Drei Aussagen, eine stimmt nicht | 1 reicht |
@@ -58,6 +59,7 @@ Handy oder mit einer Lobby, in der jede Person ihr eigenes Gerät benutzt.
 | Busfahrer | Vier Fragen, dann die lange Fahrt | 1 reicht |
 | Kategorien | Reihum ein Beispiel, wer hängt trinkt | 1 reicht |
 | Erste Zeile | Singen statt streamen, die Runde rät | 1 reicht |
+| Stichmagie | Stiche ansagen und treffen – mit Magier, Narr, Drache, Fee, Bombe & Co. | eigene nötig |
 
 ---
 
@@ -85,7 +87,15 @@ firebase login
 firebase deploy --only database
 ```
 
-Details und die Begründung stehen in [`docs/FIREBASE.md`](docs/FIREBASE.md).
+Details und die Begründung stehen in [`docs/FIREBASE.md`](docs/FIREBASE.md). Ob sich ein
+Wechsel zu Supabase lohnt und wie er ohne Ausfall ginge:
+[`docs/FIREBASE-VS-SUPABASE.md`](docs/FIREBASE-VS-SUPABASE.md).
+
+### Meme-Duell
+
+Die Meme-Vorlagen liegen als Bilder in `public/memes/` und reisen mit der App, nicht über die
+Datenbank. Regeln, Vorlagen ergänzen, Rechtliches und eine Vorschau mit drei simulierten
+Handys: [`docs/MEME-DUELL.md`](docs/MEME-DUELL.md).
 
 ---
 
