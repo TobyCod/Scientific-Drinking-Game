@@ -445,6 +445,7 @@ describe('Registry', () => {
         'never-have-i-ever',
         'schaetzfrage',
         'truth-or-dare',
+        'wer-bin-ich',
         'wortbombe',
         'zwei-wahrheiten',
       ].sort(),
