@@ -36,11 +36,13 @@ jobs:
       # Fremd-Action, weil dieser Job die Signierschluessel sieht.
       - name: Xcode waehlen
         run: |
-          V=$(for app in /Applications/Xcode_*.app; do
+          # Schleife bewusst NICHT in $( ): das bash 3.2 von macOS parst dort
+          # Konstrukte anders als ein aktuelles bash.
+          for app in /Applications/Xcode_*.app; do
             v=${app#/Applications/Xcode_}; v=${v%.app}
-            case "$v" in *[!0-9.]*) continue;; esac
-            echo "$v"
-          done | sort -t. -k1,1n -k2,2n -k3,3n | tail -1)
+            [[ $v =~ ^[0-9.]+$ ]] && echo "$v"
+          done | sort -t. -k1,1n -k2,2n -k3,3n | tail -1 > "$RUNNER_TEMP/xcode-version"
+          V=$(cat "$RUNNER_TEMP/xcode-version")
           sudo xcode-select -s "/Applications/Xcode_$V.app"
           xcodebuild -version
           xcodebuild -version | head -1 | grep -qE '^Xcode (2[6-9]|[3-9][0-9])' || { echo "Xcode 26 oder neuer noetig, gefunden: $V"; exit 1; }
