@@ -4,6 +4,7 @@ import { makeDrinkEvent } from './sips';
 import {
   formatAmount,
   formatEntry,
+  eventDrink,
   formatGlassCount,
   formatGlasses,
   formatVolume,
@@ -77,6 +78,21 @@ describe('formatEntry', () => {
 });
 
 describe('tally', () => {
+  it('behält Shot-Einheit und Glasgröße nach Löschen eines eigenen Getränks', () => {
+    const custom = { ...shot, id: 'custom-hausshot', name: 'Hausshot', defaultVolumeMl: 40, sipSizeMl: 40 };
+    const event = makeDrinkEvent(custom, 2);
+    // Das Getränk ist aus dem Katalog entfernt; nur das Ereignis kennt es noch.
+    expect(formatEntry(eventDrink(event), event.sips)).toBe('2× Hausshot');
+    expect(tally([event]).glasses).toBe(2);
+    expect(tally([event]).grams).toBe(event.alcoholGrams);
+  });
+
+  it('liest bestehende Einträge ohne Snapshot weiter aus dem Katalog', () => {
+    const { drink: _drink, ...oldEvent } = makeDrinkEvent(pils, PILS);
+    expect(tally([oldEvent]).glasses).toBe(1);
+    expect(formatEntry(eventDrink(oldEvent), oldEvent.sips)).toBe('1 Glas Bier (Pils)');
+  });
+
   it('summiert je Getränk und sortiert das Schwerste nach vorn', () => {
     const log = [
       makeDrinkEvent(pils, 3, 'kings-cup'),
@@ -102,6 +118,30 @@ describe('tally', () => {
 
   it('ist bei leerem Log leer', () => {
     expect(tally([])).toEqual({ rows: [], glasses: 0, grams: 0 });
+  });
+
+  it('summiert jedes historische Glas nach seiner eigenen Größe', () => {
+    const small = makeDrinkEvent(pils, PILS, 'manuell', undefined, 330);
+    const changedServing = { ...pils, defaultVolumeMl: 500 };
+    const large = makeDrinkEvent(changedServing, 13, 'manuell', undefined, 500);
+    expect(tally([small, large]).glasses).toBe(2);
+    expect(tally([large, small]).glasses).toBe(2);
+    expect(tally([small, large]).grams).toBeCloseTo(small.alcoholGrams + large.alcoholGrams, 8);
+  });
+
+  it('behält exakte Mengen, Namen und Stärke nach dem Löschen des eigenen Getränks', () => {
+    const custom = { ...pils, id: 'custom-genau', name: 'Hausbier' };
+    const event = makeDrinkEvent(custom, 13, 'manuell', undefined, 500);
+    expect(formatEntry(eventDrink(event), event.sips, event.drinkName, event.volumeMl)).toBe('0,5 l Hausbier');
+    expect(tally([event]).glasses).toBeCloseTo(500 / 330, 8);
+    expect(event.alcoholGrams).toBe(19.73);
+  });
+
+  it('nennt einen manuell eingetragenen halben Shot als halbes Glas statt ganzen Shot', () => {
+    const event = makeDrinkEvent(shot, 1, 'manuell', undefined, 10);
+    expect(formatEntry(shot, event.sips, event.drinkName, event.volumeMl)).toBe('½ Glas Tequila / Wodka');
+    expect(tally([event]).glasses).toBe(0.5);
+    expect(formatVolume(shot, event.sips, event.volumeMl)).toBe('1 cl');
   });
 });
 

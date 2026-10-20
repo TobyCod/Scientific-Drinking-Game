@@ -37,7 +37,7 @@ import type { BacZone, DrinkEvent, Profile } from '../../engine/types';
 import type { GameAction, GameActionInput, GamePlayer } from '../../games/types';
 import { getLoadedGame, loadGame } from '../../games/registry';
 import { createQueue } from './hostQueue';
-import { usePlayer } from '../../store/player';
+import { remainingHistory, useBacEvents, usePlayer } from '../../store/player';
 import { useFilm } from '../../store/film';
 import { useApp } from '../../store/app';
 
@@ -135,14 +135,16 @@ export interface PartyValue {
   /**
    * `at` datiert zurück (Nachtrag „ich hatte schon zwei"), `drinkId` bucht
    * auf ein anderes Getränk als das eingestellte (halbes Glas, Shot
-   * zwischendurch). Ohne beides bleibt es der Weg, den die Spiele nutzen.
+   * zwischendurch). `volumeMl` bewahrt die exakte manuelle Menge unabhängig
+   * von gerundeten Schluckzahlen. Ohne Optionen bleibt es der Weg der Spiele.
+   * Gibt die Eintrags-ID zurück, damit Rückgängig genau diese Buchung trifft.
    */
   logSipsFor: (
     playerId: string,
     sips: number,
     source?: string,
-    opts?: { at?: number; drinkId?: string },
-  ) => void;
+    opts?: { at?: number; drinkId?: string; volumeMl?: number },
+  ) => string | void;
   /** Nimmt den letzten Eintrag dieser Person zurück – auch bei Gästen. */
   undoLastFor: (playerId: string) => void;
   /** Nimmt einen bestimmten Eintrag dieser Person heraus – auch bei Gästen. */
@@ -170,7 +172,7 @@ export function PartyProvider({ children }: { children: ReactNode }) {
   const logEvent = usePlayer((s) => s.logEvent);
   const undoLast = usePlayer((s) => s.undoLast);
   const removeEvent = usePlayer((s) => s.removeEvent);
-  const log = usePlayer((s) => s.log);
+  const log = useBacEvents();
   const setLastLobbyCode = useApp((s) => s.setLastLobbyCode);
 
   const myId = useMemo(() => deviceId(), []);
@@ -187,6 +189,26 @@ export function PartyProvider({ children }: { children: ReactNode }) {
   const [localGameId, setLocalGameId] = useState<string | null>(null);
   const [localGameState, setLocalGameState] = useState<unknown>(null);
   const [localStatus, setLocalStatus] = useState<PartyStatus>('lobby');
+
+  useEffect(() => usePlayer.subscribe((state, previous) => {
+    if (previous.nightStartedAt === null || state.nightStartedAt !== null) return;
+    // Der Abschluss betrifft das ganze geteilte Handy. Die Tischübersicht
+    // beginnt frisch; die Dosierung muss alten Alkohol weiter berücksichtigen.
+    setLocalPlayers((players) => players.map((p) => {
+      if (!p.local) return p;
+      return {
+        ...p,
+        local: {
+          ...p.local,
+          log: [],
+          carryoverLog: remainingHistory(
+            [...(p.local.carryoverLog ?? []), ...p.local.log],
+            p.local.profile,
+          ),
+        },
+      };
+    }));
+  }), []);
 
   const myDrink = findDrink(currentDrinkId, customDrinks);
   // Nur die ZAHL der verbrauchten Bilder geht in die Runde, nie ein Bild.
@@ -373,12 +395,11 @@ export function PartyProvider({ children }: { children: ReactNode }) {
       setConnection(snap.val() === true ? 'online' : 'offline');
     });
     return () => unsub();
-  }, [mode]);
+  }, [mode, code]);
 
   // Live-Abo auf die Lobby
   useEffect(() => {
     if (mode !== 'online' || !code) return;
-    setConnection('connecting');
     const unsub = onValue(
       lobbyRef(code),
       (snap) => {
@@ -666,6 +687,15 @@ export function PartyProvider({ children }: { children: ReactNode }) {
       });
       if (!def) return;
       const roster = playersRef.current;
+      if (roster.length < def.minPlayers || roster.length > def.maxPlayers) {
+        setError(`${def.name} ist für ${def.minPlayers} bis ${def.maxPlayers} Spieler ausgelegt.`);
+        return;
+      }
+      if (def.requiresOwnDevice && mode !== 'online') {
+        setError(`${def.name} braucht eine Online-Lobby mit einem eigenen Handy pro Person.`);
+        return;
+      }
+      setError(null);
       const state = def.createState(roster);
       if (mode === 'local') {
         setLocalGameId(id);
@@ -768,22 +798,44 @@ export function PartyProvider({ children }: { children: ReactNode }) {
   }, [localPlayers]);
 
   const logSipsFor = useCallback(
-    (playerId: string, sips: number, source?: string, opts?: { at?: number; drinkId?: string }) => {
-      if (sips <= 0) return;
-      if (playerId === myId) {
-        const drink = findDrink(opts?.drinkId ?? currentDrinkId, customDrinks);
-        logEvent(makeDrinkEvent(drink, sips, source, opts?.at));
+    (
+      playerId: string,
+      sips: number,
+      source?: string,
+      opts?: { at?: number; drinkId?: string; volumeMl?: number },
+    ) => {
+      if (!Number.isFinite(sips) || sips <= 0) return;
+      if (opts?.volumeMl !== undefined && (!Number.isFinite(opts.volumeMl) || opts.volumeMl <= 0)) {
         return;
       }
+      if (playerId === myId) {
+        const drink = findDrink(opts?.drinkId ?? currentDrinkId, customDrinks);
+        const event = makeDrinkEvent(drink, sips, source, opts?.at, opts?.volumeMl);
+        logEvent(event);
+        return event.id;
+      }
+      const guest = playersRef.current.find((p) => p.id === playerId && p.local);
+      if (!guest?.local) return;
+      // Pass & Play ist EIN Gerät: die eigenen Getränke gelten auch für Gäste.
+      const drink = findDrink(opts?.drinkId ?? guest.local.drinkId, customDrinks);
+      const ev: DrinkEvent = makeDrinkEvent(drink, sips, source, opts?.at, opts?.volumeMl);
+      usePlayer.getState().beginNight();
       setLocalPlayers((prev) =>
         prev.map((p) => {
           if (p.id !== playerId || !p.local) return p;
-          // Pass & Play ist EIN Gerät: die eigenen Getränke gelten auch für Gäste.
-          const drink = findDrink(opts?.drinkId ?? p.local.drinkId, customDrinks);
-          const ev: DrinkEvent = makeDrinkEvent(drink, sips, source, opts?.at);
-          return { ...p, local: { ...p.local, log: [...p.local.log, ev] } };
+          return {
+            ...p,
+            local: {
+              ...p.local,
+              log: [...p.local.log, ev],
+              carryoverLog: p.local.log.length
+                ? p.local.carryoverLog
+                : remainingHistory(p.local.carryoverLog ?? [], p.local.profile, Math.min(Date.now(), ev.at)),
+            },
+          };
         }),
       );
+      return ev.id;
     },
     [myId, logEvent, currentDrinkId, customDrinks],
   );
@@ -870,7 +922,20 @@ function loadLocalPlayers(): GamePlayer[] {
   try {
     const raw = sessionStorage.getItem(LOCAL_PLAYERS_KEY);
     const parsed = raw ? (JSON.parse(raw) as GamePlayer[]) : [];
-    return Array.isArray(parsed) ? parsed.filter((p) => p?.id && p?.local) : [];
+    const players = Array.isArray(parsed) ? parsed.filter((p) => p?.id && p?.local) : [];
+    if (usePlayer.getState().nightStartedAt !== null) return players;
+    // Die 14-Stunden-Automatik läuft schon beim Laden des Spieler-Stores,
+    // bevor der Provider den Abschluss abonnieren kann.
+    return players.map((p) => ({
+      ...p,
+      local: {
+        ...p.local!,
+        log: [],
+        carryoverLog: remainingHistory(
+          [...(p.local!.carryoverLog ?? []), ...p.local!.log], p.local!.profile,
+        ),
+      },
+    }));
   } catch {
     return [];
   }
