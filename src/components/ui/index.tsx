@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type ReactNode } from 'react';
+import { useEffect, useId, useRef, useState, type ReactNode } from 'react';
 import { Icon } from '../icons';
 import { AVATAR_COLORS, avatarStyle, type AvatarColor } from './Avatar';
 import { createPortal } from 'react-dom';
@@ -31,6 +31,9 @@ export function NavBar({
   );
 }
 
+/** Offene Sheets; erst wenn das letzte schließt, scrollt die Seite wieder. */
+let openSheets = 0;
+
 export function Sheet({
   open,
   onClose,
@@ -52,16 +55,57 @@ export function Sheet({
   closeLabel?: string;
   children: ReactNode;
 }) {
+  const titleId = useId();
+  const closeRef = useRef(onClose);
+  closeRef.current = onClose;
   useEffect(() => {
     if (!open) return;
-    const onKey = (e: KeyboardEvent) => e.key === 'Escape' && onClose();
+    const dialog = backdrop.current?.querySelector<HTMLElement>('[role="dialog"]');
+    if (!dialog) return;
+    // Ein Feld mit autoFocus (Blankokarte) hat den Fokus schon beim Einhängen
+    // bekommen. Den behält es: sonst schlösse iOS die Tastatur wieder. Der
+    // Auslöser ist dann nicht mehr bekannt, also gibt es auch kein Zurück.
+    const preFocused = dialog.contains(document.activeElement);
+    const trigger = preFocused ? null : (document.activeElement as HTMLElement | null);
+    const focusable = () => [...dialog.querySelectorAll<HTMLElement>(
+      'button:not(:disabled), input:not(:disabled), select:not(:disabled), textarea:not(:disabled), a[href], [tabindex="0"]',
+    )].filter((element) => !element.closest('[hidden], [inert]'));
+    if (!preFocused) (dialog.querySelector<HTMLElement>('[data-sheet-title]') ?? focusable()[0] ?? dialog).focus();
+    // Bei verschachtelten Sheets darf nur die oberste Ebene Eingaben binden.
+    const isTop = () => [...document.querySelectorAll('[role="dialog"][aria-modal="true"]')].at(-1) === dialog;
+    const onKey = (event: KeyboardEvent) => {
+      if (!isTop()) return;
+      if (event.key === 'Escape') {
+        event.preventDefault();
+        event.stopPropagation();
+        closeRef.current();
+      }
+      if (event.key === 'Tab') {
+        const items = focusable();
+        const index = items.indexOf(document.activeElement as HTMLElement);
+        if (event.shiftKey ? index <= 0 : index === items.length - 1 || index < 0) {
+          event.preventDefault();
+          (event.shiftKey ? items.at(-1) ?? dialog : items[0] ?? dialog).focus();
+        }
+      }
+    };
+    const containFocus = (event: FocusEvent) => {
+      if (isTop() && !dialog.contains(event.target as Node)) (focusable()[0] ?? dialog).focus();
+    };
     document.addEventListener('keydown', onKey);
+    document.addEventListener('focusin', containFocus);
+    // Gezählt statt gemerkt: schließen zwei Sheets in anderer Reihenfolge,
+    // als sie aufgingen, stellte ein gemerkter Wert „hidden" wieder her.
+    openSheets++;
     document.body.style.overflow = 'hidden';
     return () => {
       document.removeEventListener('keydown', onKey);
-      document.body.style.overflow = '';
+      document.removeEventListener('focusin', containFocus);
+      openSheets--;
+      if (openSheets === 0) document.body.style.overflow = '';
+      if (trigger?.isConnected) trigger.focus();
     };
-  }, [open, onClose]);
+  }, [open]);
 
   // Ein Sheet ist ein Ebenenwechsel – der gehoert gespuert, egal ueber
   // welchen der Wege es zugeht (Knopf, Hintergrund, Escape, Wisch).
@@ -85,7 +129,8 @@ export function Sheet({
         onClick={(e) => e.stopPropagation()}
         role="dialog"
         aria-modal="true"
-        aria-label={typeof title === 'string' ? title : undefined}
+        aria-labelledby={title ? titleId : undefined}
+        tabIndex={-1}
       >
         <div className="sheet__grabber" />
         {action ? (
@@ -106,7 +151,7 @@ export function Sheet({
               </button>
             </div>
             {title && (
-              <div className="t-title2" style={{ marginBottom: 12 }}>
+              <div id={titleId} data-sheet-title tabIndex={-1} className="t-title2" style={{ marginBottom: 12 }}>
                 {title}
               </div>
             )}
@@ -114,7 +159,7 @@ export function Sheet({
         ) : (
           title && (
             <div className="row-between" style={{ marginBottom: 12 }}>
-              <div className="t-title2">{title}</div>
+              <div id={titleId} data-sheet-title tabIndex={-1} className="t-title2">{title}</div>
               <button className="btn btn--plain" onClick={schliessen}>
                 {closeLabel ?? 'Fertig'}
               </button>
@@ -157,6 +202,7 @@ export function Segmented<T extends string>({
 }
 
 export function Stepper({
+  label = 'Wert',
   value,
   onChange,
   min,
@@ -164,6 +210,7 @@ export function Stepper({
   step = 1,
   unit,
 }: {
+  label?: string;
   value: number;
   onChange: (v: number) => void;
   min: number;
@@ -178,14 +225,22 @@ export function Stepper({
   };
   return (
     <div className="stepper">
-      <button className="stepper__btn" onClick={() => set(value - step)} aria-label="weniger">
+      <button className="stepper__btn" onClick={() => set(value - step)} aria-label={`${label} verringern, aktuell ${value}${unit ? ` ${unit}` : ''}`}>
         <Icon name="minus" size={19} strokeWidth={2.2} />
       </button>
-      <div className="stepper__value">
+      <div className="stepper__value" role="spinbutton" tabIndex={0} aria-label={label}
+        aria-valuenow={value} aria-valuemin={min} aria-valuemax={max}
+        aria-valuetext={`${value}${unit ? ` ${unit}` : ''}`}
+        onKeyDown={(event) => {
+          if (event.key === 'ArrowUp' || event.key === 'ArrowDown') {
+            event.preventDefault();
+            set(value + (event.key === 'ArrowUp' ? step : -step));
+          }
+        }}>
         {value}
         {unit && <span className="stepper__unit">{unit}</span>}
       </div>
-      <button className="stepper__btn" onClick={() => set(value + step)} aria-label="mehr">
+      <button className="stepper__btn" onClick={() => set(value + step)} aria-label={`${label} erhöhen, aktuell ${value}${unit ? ` ${unit}` : ''}`}>
         <Icon name="plus" size={19} strokeWidth={2.2} />
       </button>
     </div>
@@ -208,6 +263,7 @@ export function OptionalStepper({
 }: {
   value: number | undefined;
   onChange: (v: number | undefined) => void;
+  label?: string;
   defaultValue: number;
   addLabel: string;
   removeLabel: string;

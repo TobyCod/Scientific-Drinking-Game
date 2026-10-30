@@ -1,5 +1,5 @@
 import { beforeEach, describe, expect, it, vi } from 'vitest';
-import { fireEvent, render, screen, waitFor } from '@testing-library/react';
+import { fireEvent, render, screen, waitFor, within } from '@testing-library/react';
 import { MemoryRouter, Route, Routes, useLocation } from 'react-router-dom';
 import { LobbyScreen } from './LobbyScreen';
 import { PartyCtx, type PartyValue } from '../party/PartyContext';
@@ -99,8 +99,7 @@ describe('Mitspieler auf diesem Handy', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Leer' }));
     fireEvent.change(screen.getByLabelText('Zielpegel'), { target: { value: '55' } });
     fireEvent.click(screen.getByRole('button', { name: '+ Körpergröße angeben (genauer)' }));
-    // Zweiter Stepper im Sheet ist die Körpergröße (nach dem Gewicht, wie im Profil).
-    fireEvent.click(screen.getAllByRole('button', { name: 'mehr' })[1]);
+    fireEvent.click(screen.getByRole('button', { name: /^Körpergröße erhöhen/ }));
     const { profile } = submitted(add);
     expect(profile.stomach).toBe('empty');
     expect(profile.targetBac).toBeCloseTo(0.55);
@@ -130,8 +129,8 @@ describe('Mitspieler auf diesem Handy', () => {
     fireEvent.change(screen.getByLabelText('Zielpegel'), { target: { value: '55' } });
     fireEvent.click(screen.getByRole('button', { name: '+ Körpergröße angeben (genauer)' }));
     // Gewicht und Alter hochzählen – genau die Felder, die früher hängen blieben.
-    fireEvent.click(screen.getAllByRole('button', { name: 'mehr' })[0]);
-    fireEvent.click(screen.getAllByRole('button', { name: 'mehr' })[2]);
+    fireEvent.click(screen.getByRole('button', { name: /^Gewicht erhöhen/ }));
+    fireEvent.click(screen.getByRole('button', { name: /^Alter erhöhen/ }));
     fireEvent.click(screen.getByRole('switch', { name: 'Alkoholfrei' }));
     submitted(add);
     fireEvent.click(screen.getByRole('button', { name: 'Mitspieler hinzufügen' }));
@@ -321,6 +320,50 @@ describe('Spielweise und Spieleauswahl', () => {
     mount();
     fireEvent.click(screen.getByRole('button', { name: 'Mit Code beitreten ›' }));
     expect(screen.getByPlaceholderText('CODE')).toBeInTheDocument();
+  });
+
+  it('zeigt einen Beitrittsfehler im offenen Sheet und behält den Code', async () => {
+    let fail!: () => void;
+    const joinOnline = vi.fn(() => new Promise<void>((_, reject) => { fail = () => reject(new Error()); }));
+    mount(party({ joinOnline, error: 'Lobby nicht gefunden' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Mit Code beitreten ›' }));
+    fireEvent.change(screen.getByPlaceholderText('CODE'), { target: { value: 'abc123' } });
+    fireEvent.click(screen.getByRole('button', { name: 'Beitreten' }));
+    expect(screen.getByRole('button', { name: 'Beitreten …' })).toBeDisabled();
+    fireEvent.click(screen.getByRole('button', { name: 'Beitreten …' }));
+    expect(joinOnline).toHaveBeenCalledTimes(1);
+    fail();
+    const sheet = await screen.findByRole('dialog');
+    await waitFor(() => expect(within(sheet).getByRole('alert')).toHaveTextContent('Lobby nicht gefunden'));
+    expect(screen.getByPlaceholderText('CODE')).toHaveValue('ABC123');
+    expect(within(sheet).getByRole('button', { name: 'Beitreten' })).toBeEnabled();
+  });
+
+  it.each([
+    [true, /übernimmt die Runde/],
+    [false, /spielen ohne dich weiter/],
+  ])('fragt vor dem Verlassen nach (Host: %s) und bleibt beim Abbrechen', (isHost, folge) => {
+    const leave = vi.fn();
+    const ask = vi.spyOn(window, 'confirm').mockReturnValue(false);
+    mount(party({ mode: 'online', code: 'ABC123', isHost, leave, connection: 'online' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Verlassen' }));
+    expect(ask).toHaveBeenCalledExactlyOnceWith(expect.stringMatching(folge));
+    expect(leave).not.toHaveBeenCalled();
+    ask.mockReturnValue(true);
+    fireEvent.click(screen.getByRole('button', { name: 'Verlassen' }));
+    expect(leave).toHaveBeenCalledTimes(1);
+    ask.mockRestore();
+  });
+
+  it.each([
+    ['ok', () => Promise.resolve(), /^Einladung kopiert$/],
+    ['fehler', () => Promise.reject(new Error()), /Kopieren ging nicht.*#\/lobby\?code=ABC123/],
+  ])('meldet das Kopieren der Einladung (%s)', async (_fall, writeText, meldung) => {
+    Object.defineProperty(navigator, 'clipboard', { value: { writeText: vi.fn(writeText) }, configurable: true });
+    mount(party({ mode: 'online', code: 'ABC123', connection: 'online' }));
+    expect(screen.queryByRole('status')).toBeNull();
+    fireEvent.click(screen.getByRole('button', { name: /Einladung teilen/ }));
+    expect(await screen.findByText(meldung)).toBeInTheDocument();
   });
 
   it('öffnet passende Spiele zur Ansicht ohne sie zu starten', () => {
