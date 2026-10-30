@@ -21,19 +21,25 @@ export async function initNative(): Promise<void> {
 
 /**
  * Statusleiste am Thema der App, nicht am System: wer im Dunkelmodus der App
- * auf hell umstellt, bekäme sonst hellen Text auf hellem Grund.
+ * auf hell umstellt, bekäme sonst hellen Text auf hellem Grund. Nur bei der
+ * Darstellung „System" folgt sie dem Gerät, wie die Oberfläche selbst.
  *
  * `Style.Dark` heißt in diesem Plugin „heller Text für dunklen Hintergrund"
  * — die Benennung geht vom Erscheinungsbild aus, nicht von der Schriftfarbe.
  */
 async function statusBar(): Promise<void> {
   const { StatusBar, Style } = await import('@capacitor/status-bar');
-  const apply = (theme: 'dark' | 'light') =>
-    void StatusBar.setStyle({ style: theme === 'light' ? Style.Light : Style.Dark }).catch(
+  const media = window.matchMedia('(prefers-color-scheme: dark)');
+  const apply = () => {
+    const theme = useApp.getState().theme;
+    const resolved = theme === 'system' ? (media.matches ? 'dark' : 'light') : theme;
+    void StatusBar.setStyle({ style: resolved === 'light' ? Style.Light : Style.Dark }).catch(
       () => {},
     );
-  apply(useApp.getState().theme);
-  useApp.subscribe((state) => apply(state.theme));
+  };
+  apply();
+  useApp.subscribe(apply);
+  media.addEventListener('change', apply);
 }
 
 /**
