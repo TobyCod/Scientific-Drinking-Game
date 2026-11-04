@@ -1,9 +1,10 @@
 import { Outlet, useLocation, useNavigationType } from 'react-router-dom';
 import { useEffect, useLayoutEffect } from 'react';
 import { useApp } from '../store/app';
+import { useResolvedTheme } from '../lib/theme';
 import { WaterReminder } from '../features/bac/WaterReminder';
 import { GameInvite } from '../features/party/GameInvite';
-import { TabBar } from './TabBar';
+import { NativeAwareTabBar } from './NativeAwareTabBar';
 
 export function Layout() {
   useTheme();
@@ -17,7 +18,7 @@ export function Layout() {
       <Outlet />
       <WaterReminder />
       <GameInvite />
-      <TabBar />
+      <NativeAwareTabBar />
     </div>
   );
 }
@@ -67,18 +68,11 @@ function useScrollMemory() {
 }
 
 function useTheme() {
-  const theme = useApp((state) => state.theme);
+  const theme = useResolvedTheme();
   useEffect(() => {
-    const media = theme === 'system' ? window.matchMedia('(prefers-color-scheme: dark)') : null;
-    const update = () => {
-      const resolved = theme === 'system' ? (media?.matches ? 'dark' : 'light') : theme;
-      document.documentElement.dataset.theme = resolved;
-      document.querySelector('meta[name="theme-color"]')
-        ?.setAttribute('content', resolved === 'light' ? '#efe7da' : '#0d0a08');
-    };
-    update();
-    media?.addEventListener('change', update);
-    return () => media?.removeEventListener('change', update);
+    document.documentElement.dataset.theme = theme;
+    document.querySelector('meta[name="theme-color"]')
+      ?.setAttribute('content', theme === 'light' ? '#efe7da' : '#0d0a08');
   }, [theme]);
 }
 

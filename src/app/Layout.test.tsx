@@ -81,6 +81,28 @@ it('lässt die Leiste nach einem verlorenen Finger wieder bedienbar', () => {
   expect(bar).toHaveClass('is-pressed');
 });
 
+it('nimmt den ersten Tastatur-Klick auch unmittelbar nach dem App-Start an', () => {
+  vi.spyOn(performance, 'now').mockReturnValue(50);
+  render(<MemoryRouter initialEntries={['/']}><Layout /></MemoryRouter>);
+  fireEvent.click(screen.getByRole('link', { name: 'Album' }), { detail: 0 });
+  expect(screen.getByRole('link', { name: 'Album' })).toHaveAttribute('aria-current', 'page');
+});
+
+it('verwirft Loslassen weit neben der Tab-Leiste und blockiert danach keine Tastaturbedienung', () => {
+  render(<MemoryRouter initialEntries={['/pegel']}><Layout /></MemoryRouter>);
+  const bar = document.querySelector('.tabbar__inner')!;
+  bar.getBoundingClientRect = () => ({ left: 0, right: 400, top: 0, bottom: 60, width: 400, height: 60 }) as DOMRect;
+  const pointer = (type: string, x: number) => fireEvent(bar,
+    Object.assign(new Event(type, { bubbles: true }), { pointerId: 1, button: 0, clientX: x, clientY: 30 }),
+  );
+  pointer('pointerdown', 250);
+  pointer('pointermove', 700);
+  pointer('pointerup', 700);
+  expect(screen.getByRole('link', { name: 'Pegel' })).toHaveAttribute('aria-current', 'page');
+  fireEvent.click(screen.getByRole('link', { name: 'Album' }), { detail: 0 });
+  expect(screen.getByRole('link', { name: 'Album' })).toHaveAttribute('aria-current', 'page');
+});
+
 it('folgt der Systemdarstellung live und respektiert anschließend eine feste Wahl', async () => {
   const { useApp } = await import('../store/app');
   const media = new EventTarget();

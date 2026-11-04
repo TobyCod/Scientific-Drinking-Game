@@ -1,9 +1,10 @@
-import { useEffect, useId, useRef, useState, type ReactNode } from 'react';
+import { useCallback, useEffect, useId, useRef, useState, type ReactNode } from 'react';
 import { Icon } from '../icons';
 import { AVATAR_COLORS, avatarStyle, type AvatarColor } from './Avatar';
 import { createPortal } from 'react-dom';
 import { haptic } from '../../lib/haptics';
 import { useSwipeDown } from '../../lib/gestures';
+import { useModalDialog } from '../../lib/modal';
 
 export function NavBar({
   title,
@@ -31,9 +32,6 @@ export function NavBar({
   );
 }
 
-/** Offene Sheets; erst wenn das letzte schließt, scrollt die Seite wieder. */
-let openSheets = 0;
-
 export function Sheet({
   open,
   onClose,
@@ -55,57 +53,9 @@ export function Sheet({
   closeLabel?: string;
   children: ReactNode;
 }) {
+  const dialog = useRef<HTMLDivElement>(null);
+  useModalDialog(dialog, open, onClose);
   const titleId = useId();
-  const closeRef = useRef(onClose);
-  closeRef.current = onClose;
-  useEffect(() => {
-    if (!open) return;
-    const dialog = backdrop.current?.querySelector<HTMLElement>('[role="dialog"]');
-    if (!dialog) return;
-    // Ein Feld mit autoFocus (Blankokarte) hat den Fokus schon beim Einhängen
-    // bekommen. Den behält es: sonst schlösse iOS die Tastatur wieder. Der
-    // Auslöser ist dann nicht mehr bekannt, also gibt es auch kein Zurück.
-    const preFocused = dialog.contains(document.activeElement);
-    const trigger = preFocused ? null : (document.activeElement as HTMLElement | null);
-    const focusable = () => [...dialog.querySelectorAll<HTMLElement>(
-      'button:not(:disabled), input:not(:disabled), select:not(:disabled), textarea:not(:disabled), a[href], [tabindex="0"]',
-    )].filter((element) => !element.closest('[hidden], [inert]'));
-    if (!preFocused) (dialog.querySelector<HTMLElement>('[data-sheet-title]') ?? focusable()[0] ?? dialog).focus();
-    // Bei verschachtelten Sheets darf nur die oberste Ebene Eingaben binden.
-    const isTop = () => [...document.querySelectorAll('[role="dialog"][aria-modal="true"]')].at(-1) === dialog;
-    const onKey = (event: KeyboardEvent) => {
-      if (!isTop()) return;
-      if (event.key === 'Escape') {
-        event.preventDefault();
-        event.stopPropagation();
-        closeRef.current();
-      }
-      if (event.key === 'Tab') {
-        const items = focusable();
-        const index = items.indexOf(document.activeElement as HTMLElement);
-        if (event.shiftKey ? index <= 0 : index === items.length - 1 || index < 0) {
-          event.preventDefault();
-          (event.shiftKey ? items.at(-1) ?? dialog : items[0] ?? dialog).focus();
-        }
-      }
-    };
-    const containFocus = (event: FocusEvent) => {
-      if (isTop() && !dialog.contains(event.target as Node)) (focusable()[0] ?? dialog).focus();
-    };
-    document.addEventListener('keydown', onKey);
-    document.addEventListener('focusin', containFocus);
-    // Gezählt statt gemerkt: schließen zwei Sheets in anderer Reihenfolge,
-    // als sie aufgingen, stellte ein gemerkter Wert „hidden" wieder her.
-    openSheets++;
-    document.body.style.overflow = 'hidden';
-    return () => {
-      document.removeEventListener('keydown', onKey);
-      document.removeEventListener('focusin', containFocus);
-      openSheets--;
-      if (openSheets === 0) document.body.style.overflow = '';
-      if (trigger?.isConnected) trigger.focus();
-    };
-  }, [open]);
 
   // Ein Sheet ist ein Ebenenwechsel – der gehoert gespuert, egal ueber
   // welchen der Wege es zugeht (Knopf, Hintergrund, Escape, Wisch).
@@ -117,6 +67,10 @@ export function Sheet({
   // und damit am weitesten vom Daumen weg.
   const backdrop = useRef<HTMLDivElement>(null);
   const swipeRef = useSwipeDown<HTMLDivElement>(schliessen, backdrop);
+  const setDialog = useCallback((el: HTMLDivElement | null) => {
+    dialog.current = el;
+    swipeRef(el);
+  }, [swipeRef]);
 
   if (!open) return null;
   // Portal ans <body>: die Screens haben durch ihre Einblend-Animation einen
@@ -124,7 +78,7 @@ export function Sheet({
   return createPortal(
     <div className="sheet-backdrop" ref={backdrop} onClick={schliessen} role="presentation">
       <div
-        ref={swipeRef}
+        ref={setDialog}
         className="sheet"
         onClick={(e) => e.stopPropagation()}
         role="dialog"
@@ -132,6 +86,7 @@ export function Sheet({
         aria-labelledby={title ? titleId : undefined}
         tabIndex={-1}
       >
+        <div className="sheet__header">
         <div className="sheet__grabber" />
         {action ? (
           <>
@@ -166,7 +121,8 @@ export function Sheet({
             </div>
           )
         )}
-        {children}
+        </div>
+        <div className="sheet__content">{children}</div>
       </div>
     </div>,
     document.body,
