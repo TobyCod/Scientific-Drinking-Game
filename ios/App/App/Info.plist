@@ -12,6 +12,10 @@
 	     TestFlight auf "Missing Compliance" stehen und erreicht keinen Tester. -->
 	<key>NSCameraUsageDescription</key>
 	<string>Die Kamera wird nur benutzt, wenn du selbst ein Foto für das Album des Abends aufnimmst. Die Bilder bleiben auf deinem Gerät und werden nirgends hochgeladen.</string>
+	<key>NSPhotoLibraryAddUsageDescription</key>
+	<string>Wenn du ein Bild aus dem Album über „Teilen" sicherst, legt die App es in deiner Fotomediathek ab. Gelesen wird dort nichts.</string>
+	<key>NSMotionUsageDescription</key>
+	<string>Die Lage des Handys bewegt die Flüssigkeit im Glas, wenn du „Glas mitneigen" einschaltest. Die Werte bleiben auf deinem Gerät.</string>
 	<key>ITSAppUsesNonExemptEncryption</key>
 	<false/>
 	<key>CFBundleDisplayName</key>
